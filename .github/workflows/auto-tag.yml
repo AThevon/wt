@@ -1,4 +1,4 @@
-name: Auto Tag
+name: Auto Tag & Release
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
       - 'wt.sh'
 
 jobs:
-  tag:
+  tag-and-release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -18,14 +18,35 @@ jobs:
           fetch-depth: 0
 
       - name: Extract version and create tag
+        id: tag
         run: |
           VERSION=$(grep -m1 'VERSION=' wt.sh | cut -d'"' -f2)
           TAG="v$VERSION"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping"
+            echo "created=false" >> $GITHUB_OUTPUT
           else
             echo "Creating tag $TAG"
             git tag "$TAG"
             git push origin "$TAG"
+            echo "created=true" >> $GITHUB_OUTPUT
           fi
+
+      - name: Create Release
+        if: steps.tag.outputs.created == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          generate_release_notes: true
+
+      - name: Trigger Homebrew formula update
+        if: steps.tag.outputs.created == 'true'
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          repository: AThevon/homebrew-wt
+          event-type: update-formula
+          client-payload: '{"tag": "${{ steps.tag.outputs.tag }}"}'
