@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.1.5"
+VERSION="1.1.6"
 
 # =============================================================================
 # Options de ligne de commande
@@ -23,10 +23,39 @@ if [[ "$1" == "--shell-init" ]]; then
 # wt - Git Worktree Manager
 unalias wt 2>/dev/null
 function wt() {
-  local target=$(WT_WRAPPED=1 wt-core "$@")
-  if [[ -n "$target" && -d "$target" ]]; then
+  local output=$(WT_WRAPPED=1 wt-core "$@")
+  local target=""
+  local claude_cmd=""
+
+  # Parse output: path on first line, optional CLAUDE marker on second
+  while IFS= read -r line; do
+    if [[ "$line" == CLAUDE:* ]]; then
+      claude_cmd="$line"
+    elif [[ -n "$line" && -d "$line" ]]; then
+      target="$line"
+    fi
+  done <<< "$output"
+
+  if [[ -n "$target" ]]; then
     cd "$target"
     echo "Navigated to: $target"
+
+    # Launch claude if marker present
+    if [[ "$claude_cmd" == CLAUDE:issue:* ]]; then
+      local issue_num="${claude_cmd#CLAUDE:issue:}"
+      echo ""
+      echo "Starting Claude Code for Issue #$issue_num planning..."
+      echo "Tip: Ask Claude to run 'gh issue view $issue_num' to read the issue"
+      echo ""
+      claude
+    elif [[ "$claude_cmd" == CLAUDE:pr:* ]]; then
+      local pr_num="${claude_cmd#CLAUDE:pr:}"
+      echo ""
+      echo "Starting Claude Code for PR #$pr_num review..."
+      echo "Tip: Ask Claude to run 'gh pr view $pr_num' and 'gh pr diff $pr_num'"
+      echo ""
+      claude
+    fi
   fi
 }
 EOF
@@ -263,12 +292,8 @@ prompt_claude_pr_review() {
     fzf --height=20% --layout=reverse --border --header="Launch Claude Code for PR review?")
 
   if [[ "$choice" == "Yes"* ]]; then
-    cd "$wt_path"
-    msg ""
-    msg "Starting Claude Code for PR #$pr_num review..."
-    msg "Tip: Ask Claude to run 'gh pr view $pr_num' and 'gh pr diff $pr_num'"
-    msg ""
-    claude
+    # Output marker for shell wrapper to launch claude
+    echo "CLAUDE:pr:$pr_num"
   fi
 }
 
@@ -284,12 +309,8 @@ prompt_claude_issue_plan() {
     fzf --height=20% --layout=reverse --border --header="Launch Claude Code to plan this issue?")
 
   if [[ "$choice" == "Yes"* ]]; then
-    cd "$wt_path"
-    msg ""
-    msg "Starting Claude Code for Issue #$issue_num planning..."
-    msg "Tip: Ask Claude to run 'gh issue view $issue_num' to read the issue"
-    msg ""
-    claude
+    # Output marker for shell wrapper to launch claude
+    echo "CLAUDE:issue:$issue_num"
   fi
 }
 
