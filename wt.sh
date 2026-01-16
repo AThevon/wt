@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.1.4"
+VERSION="1.1.5"
 
 # =============================================================================
 # Options de ligne de commande
@@ -268,7 +268,7 @@ prompt_claude_pr_review() {
     msg "Starting Claude Code for PR #$pr_num review..."
     msg "Tip: Ask Claude to run 'gh pr view $pr_num' and 'gh pr diff $pr_num'"
     msg ""
-    exec claude </dev/tty
+    claude
   fi
 }
 
@@ -289,7 +289,7 @@ prompt_claude_issue_plan() {
     msg "Starting Claude Code for Issue #$issue_num planning..."
     msg "Tip: Ask Claude to run 'gh issue view $issue_num' to read the issue"
     msg ""
-    exec claude </dev/tty
+    claude
   fi
 }
 
