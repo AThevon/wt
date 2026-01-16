@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.1.3"
+VERSION="1.1.4"
 
 # =============================================================================
 # Options de ligne de commande
@@ -264,8 +264,11 @@ prompt_claude_pr_review() {
 
   if [[ "$choice" == "Yes"* ]]; then
     cd "$wt_path"
+    msg ""
     msg "Starting Claude Code for PR #$pr_num review..."
-    claude -p "You are reviewing PR #$pr_num. Run 'gh pr view $pr_num' and 'gh pr diff $pr_num' to get context, then analyze the code changes for bugs, security issues, and best practices." </dev/tty
+    msg "Tip: Ask Claude to run 'gh pr view $pr_num' and 'gh pr diff $pr_num'"
+    msg ""
+    exec claude </dev/tty
   fi
 }
 
@@ -282,8 +285,11 @@ prompt_claude_issue_plan() {
 
   if [[ "$choice" == "Yes"* ]]; then
     cd "$wt_path"
+    msg ""
     msg "Starting Claude Code for Issue #$issue_num planning..."
-    claude -p "You are working on Issue #$issue_num. Run 'gh issue view $issue_num' to read the issue, then explore the codebase and propose a detailed implementation plan." </dev/tty
+    msg "Tip: Ask Claude to run 'gh issue view $issue_num' to read the issue"
+    msg ""
+    exec claude </dev/tty
   fi
 }
 
