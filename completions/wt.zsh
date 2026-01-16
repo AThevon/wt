@@ -27,16 +27,14 @@ function wt() {
       local issue_num="${claude_cmd#CLAUDE:issue:}"
       echo ""
       echo "Starting Claude Code for Issue #$issue_num planning..."
-      echo "Tip: Ask Claude to run 'gh issue view $issue_num' to read the issue"
       echo ""
-      claude
+      claude "Read issue #$issue_num with 'gh issue view $issue_num', then explore the codebase and propose an implementation plan."
     elif [[ "$claude_cmd" == CLAUDE:pr:* ]]; then
       local pr_num="${claude_cmd#CLAUDE:pr:}"
       echo ""
       echo "Starting Claude Code for PR #$pr_num review..."
-      echo "Tip: Ask Claude to run 'gh pr view $pr_num' and 'gh pr diff $pr_num'"
       echo ""
-      claude
+      claude "Review PR #$pr_num. Run 'gh pr view $pr_num' and 'gh pr diff $pr_num' to get context, then analyze the code changes for bugs, security issues, and best practices."
     fi
   fi
 }
