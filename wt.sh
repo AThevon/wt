@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.1.6"
+VERSION="1.1.7"
 
 # =============================================================================
 # Options de ligne de commande
@@ -285,11 +285,11 @@ prompt_claude_pr_review() {
   local wt_path="$2"
 
   if ! has_claude; then
-    return 1
+    return 0
   fi
 
   local choice=$(printf "%s\n" "Yes, start Claude review" "No, just open worktree" | \
-    fzf --height=20% --layout=reverse --border --header="Launch Claude Code for PR review?")
+    fzf --height=20% --layout=reverse --border --header="Launch Claude Code for PR review?" </dev/tty)
 
   if [[ "$choice" == "Yes"* ]]; then
     # Output marker for shell wrapper to launch claude
@@ -302,11 +302,11 @@ prompt_claude_issue_plan() {
   local wt_path="$2"
 
   if ! has_claude; then
-    return 1
+    return 0
   fi
 
   local choice=$(printf "%s\n" "Yes, start Claude planning" "No, just open worktree" | \
-    fzf --height=20% --layout=reverse --border --header="Launch Claude Code to plan this issue?")
+    fzf --height=20% --layout=reverse --border --header="Launch Claude Code to plan this issue?" </dev/tty)
 
   if [[ "$choice" == "Yes"* ]]; then
     # Output marker for shell wrapper to launch claude
