@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.1.1"
+VERSION="1.1.2"
 
 # =============================================================================
 # Options de ligne de commande
@@ -352,10 +352,10 @@ create_from_branch() {
 create_new_branch() {
   # 1. Input nom de branche
   msg "Enter new branch name:"
-  local branch_name
-  read -r branch_name </dev/tty
+  local input_branch_name
+  read -r input_branch_name </dev/tty
 
-  if [[ -z "$branch_name" ]]; then
+  if [[ -z "$input_branch_name" ]]; then
     msg "No branch name provided"
     return 1
   fi
@@ -382,7 +382,16 @@ create_new_branch() {
     base_branch="$current_branch"
   fi
 
-  # 3. Créer le worktree
+  # 3. Incrémenter si la branche existe déjà
+  local branch_name="$input_branch_name"
+  local counter=2
+  while git show-ref --verify --quiet "refs/heads/$branch_name" 2>/dev/null || \
+        git show-ref --verify --quiet "refs/remotes/origin/$branch_name" 2>/dev/null; do
+    branch_name="${input_branch_name}-${counter}"
+    ((counter++))
+  done
+
+  # 4. Créer le worktree
   local sanitized=$(echo "$branch_name" | sed 's|/|-|g')
   local worktree_path="$(dirname "$MAIN_REPO")/${REPO_NAME}-${sanitized}"
 
@@ -393,7 +402,7 @@ create_new_branch() {
     msg "New branch: $branch_name (based on $base_branch)"
     echo "$worktree_path"  # SEUL output sur stdout
   else
-    msg "Error creating worktree (branch may already exist)"
+    msg "Error creating worktree"
     return 1
   fi
 }
@@ -425,7 +434,17 @@ create_from_issue() {
 
   # Créer un slug à partir du titre
   local slug=$(echo "$issue_title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-30)
-  local branch_name="feature/${issue_num}-${slug}"
+  local base_branch_name="feature/${issue_num}-${slug}"
+  local branch_name="$base_branch_name"
+
+  # Incrémenter si la branche existe déjà
+  local counter=2
+  while git show-ref --verify --quiet "refs/heads/$branch_name" 2>/dev/null || \
+        git show-ref --verify --quiet "refs/remotes/origin/$branch_name" 2>/dev/null; do
+    branch_name="${base_branch_name}-${counter}"
+    ((counter++))
+  done
+
   local sanitized=$(echo "$branch_name" | sed 's|/|-|g')
   local worktree_path="$(dirname "$MAIN_REPO")/${REPO_NAME}-${sanitized}"
 
@@ -442,7 +461,7 @@ create_from_issue() {
     msg "Branch: $branch_name"
     echo "$worktree_path"  # SEUL output sur stdout
   else
-    msg "Error creating worktree (branch may already exist)"
+    msg "Error creating worktree"
     return 1
   fi
 }
