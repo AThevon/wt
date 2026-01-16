@@ -5,7 +5,7 @@
 unalias wt 2>/dev/null
 
 function wt() {
-  local target=$(wt-core "$@")
+  local target=$(WT_WRAPPED=1 wt-core "$@")
   if [[ -n "$target" && -d "$target" ]]; then
     cd "$target"
     echo "Navigated to: $target"

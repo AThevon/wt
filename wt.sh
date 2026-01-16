@@ -7,14 +7,14 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.0.1"
+VERSION="1.1.0"
 
 # =============================================================================
 # Options de ligne de commande
 # =============================================================================
 
 if [[ "$1" == "--version" || "$1" == "-v" ]]; then
-  echo "wt $VERSION"
+  echo "wt $VERSION" >&2
   exit 0
 fi
 
@@ -23,7 +23,7 @@ if [[ "$1" == "--shell-init" ]]; then
 # wt - Git Worktree Manager
 unalias wt 2>/dev/null
 function wt() {
-  local target=$(wt-core "$@")
+  local target=$(WT_WRAPPED=1 wt-core "$@")
   if [[ -n "$target" && -d "$target" ]]; then
     cd "$target"
     echo "Navigated to: $target"
@@ -34,23 +34,30 @@ EOF
 fi
 
 if [[ "$1" == "--help" || "$1" == "-h" ]]; then
-  cat <<EOF
+  cat >&2 <<EOF
 wt - Git Worktree Manager with fzf
 
-Usage: wt [options]
+Usage: wt [options] [name]
+
+Arguments:
+  name             Quick switch: fuzzy match on worktrees
 
 Options:
   --help, -h       Show this help message
   --version, -v    Show version number
   --shell-init     Output shell function for automatic cd
 
-Interactive commands:
-  Run 'wt' in a git repository to open the interactive menu.
+Interactive features:
+  - Create worktrees (from branch, new branch, PR, or GitHub issue)
+  - Dirty indicator (*) shows worktrees with uncommitted changes
+  - Ctrl+E: Open worktree in editor (cursor > code > \$EDITOR > vim)
+  - Manage git stashes
+  - Claude Code integration for PR review and issue planning
 
 For automatic directory changing, add to your .zshrc:
   eval "\$(wt-core --shell-init)"
 
-Dependencies: fzf, gh (optional, for PR features), jq
+Dependencies: fzf, gh (optional, for GitHub features), jq, claude (optional)
 EOF
   exit 0
 fi
@@ -78,6 +85,18 @@ has_fzf() {
 
 has_gh() {
   command -v gh &> /dev/null && gh auth status &> /dev/null
+}
+
+has_claude() {
+  command -v claude &> /dev/null
+}
+
+get_editor() {
+  if command -v cursor &>/dev/null; then echo "cursor"
+  elif command -v code &>/dev/null; then echo "code"
+  elif [[ -n "$EDITOR" ]]; then echo "$EDITOR"
+  else echo "vim"
+  fi
 }
 
 # Messages sur stderr uniquement
@@ -143,7 +162,14 @@ format_worktree_line() {
   local wt_path="$1"
   local branch=$(git -C "$wt_path" branch --show-current 2>/dev/null || echo "detached")
   local short_path="${wt_path/#$HOME/~}"
-  printf "%-50s [%s]\n" "$short_path" "$branch"
+
+  # Dirty check
+  local dirty=""
+  if [[ -n $(git -C "$wt_path" status --porcelain 2>/dev/null) ]]; then
+    dirty="*"
+  fi
+
+  printf "%-50s %s[%s]\n" "$short_path" "$dirty" "$branch"
 }
 
 format_all_worktrees() {
@@ -189,6 +215,100 @@ pr_preview() {
   echo "================================================"
   echo "Changed files:"
   gh pr diff "$pr_num" --stat 2>/dev/null | /usr/bin/head -20
+}
+
+# =============================================================================
+# Issues
+# =============================================================================
+
+get_formatted_issues() {
+  if ! has_gh; then
+    msg "gh not installed or not authenticated"
+    return 1
+  fi
+
+  gh issue list --limit 20 --json number,title,author,labels,state 2>/dev/null | \
+    /usr/bin/jq -r '.[] |
+      (if (.labels | length) > 0 then (.labels | map(.name) | join(","))[0:15] else "-" end) as $labels |
+      "#\(.number)\t\(.title[0:50])\t@\(.author.login)\t\($labels)"'
+}
+
+issue_preview() {
+  local issue_num="$1"
+  if [[ -z "$issue_num" ]]; then
+    echo "Select an issue"
+    return
+  fi
+
+  echo "================================================"
+  gh issue view "$issue_num" --json title,body,labels,state,comments 2>/dev/null | \
+    /usr/bin/jq -r '"Title: \(.title)\n\nState: \(.state)\n\nLabels: \(if (.labels | length) > 0 then (.labels | map(.name) | join(", ")) else "none" end)\n\nComments: \(.comments | length)\n\n" + (if .body then "Description:\n\(.body[0:800])" else "No description" end)'
+  echo ""
+  echo "================================================"
+}
+
+# =============================================================================
+# Claude Code Integration
+# =============================================================================
+
+prompt_claude_pr_review() {
+  local pr_num="$1"
+  local wt_path="$2"
+
+  if ! has_claude; then
+    return 1
+  fi
+
+  local choice=$(printf "%s\n" "Yes, start Claude review" "No, just open worktree" | \
+    fzf --height=20% --layout=reverse --border --header="Launch Claude Code for PR review?")
+
+  if [[ "$choice" == "Yes"* ]]; then
+    # Récupérer les infos de la PR
+    local pr_info=$(gh pr view "$pr_num" --json title,body,author 2>/dev/null)
+
+    cd "$wt_path"
+    claude --print "You are reviewing PR #$pr_num. Here's the context:
+
+$pr_info
+
+Please review this PR:
+1. Analyze the code changes for bugs, security issues, and best practices
+2. Check for edge cases and error handling
+3. Suggest improvements if any
+4. Give an overall assessment
+
+The diff is available via 'gh pr diff $pr_num'. Start by examining the changes."
+  fi
+}
+
+prompt_claude_issue_plan() {
+  local issue_num="$1"
+  local wt_path="$2"
+
+  if ! has_claude; then
+    return 1
+  fi
+
+  local choice=$(printf "%s\n" "Yes, start Claude planning" "No, just open worktree" | \
+    fzf --height=20% --layout=reverse --border --header="Launch Claude Code to plan this issue?")
+
+  if [[ "$choice" == "Yes"* ]]; then
+    # Récupérer les infos de l'issue
+    local issue_info=$(gh issue view "$issue_num" --json title,body,labels,comments 2>/dev/null)
+
+    cd "$wt_path"
+    claude --print "You are working on Issue #$issue_num. Here's the context:
+
+$issue_info
+
+Please:
+1. Analyze the issue requirements
+2. Explore the codebase to understand the current implementation
+3. Propose a detailed implementation plan
+4. Identify potential challenges or edge cases
+
+Start by reading the issue carefully and exploring relevant files."
+  fi
 }
 
 # =============================================================================
@@ -252,6 +372,56 @@ create_from_branch() {
   fi
 }
 
+# Créer un worktree avec une nouvelle branche
+create_new_branch() {
+  # 1. Input nom de branche
+  msg "Enter new branch name:"
+  local branch_name
+  read -r branch_name </dev/tty
+
+  if [[ -z "$branch_name" ]]; then
+    msg "No branch name provided"
+    return 1
+  fi
+
+  # 2. Sélectionner branche de base
+  msg "Fetching branches..."
+  git fetch --all --prune >/dev/null 2>&1
+
+  local current_branch=$(git branch --show-current 2>/dev/null || echo "HEAD")
+  local base_branch
+  base_branch=$(printf "%s\n" "$current_branch (current)" $(git branch -a --format='%(refname:short)' | grep -v '^HEAD') | \
+    fzf --height=60% \
+        --layout=reverse \
+        --border \
+        --header="Select base branch (ESC to use current: $current_branch)" \
+        --preview="
+          branch=\$(echo {} | sed 's/ (current)\$//')
+          git log --oneline --graph --color=always -10 \"\$branch\" 2>/dev/null
+        " \
+        --preview-window=right:50%)
+
+  # Si rien sélectionné ou "(current)", utiliser la branche actuelle
+  if [[ -z "$base_branch" || "$base_branch" == *"(current)" ]]; then
+    base_branch="$current_branch"
+  fi
+
+  # 3. Créer le worktree
+  local sanitized=$(echo "$branch_name" | sed 's|/|-|g')
+  local worktree_path="$(dirname "$MAIN_REPO")/${REPO_NAME}-${sanitized}"
+
+  msg "Creating worktree with new branch '$branch_name' from '$base_branch'..."
+
+  if git worktree add -b "$branch_name" "$worktree_path" "$base_branch" >/dev/null 2>&1; then
+    msg "Worktree created: $worktree_path"
+    msg "New branch: $branch_name (based on $base_branch)"
+    echo "$worktree_path"  # SEUL output sur stdout
+  else
+    msg "Error creating worktree (branch may already exist)"
+    return 1
+  fi
+}
+
 # Créer un worktree depuis une PR
 create_from_pr() {
   local pr_branch="$1"
@@ -268,6 +438,35 @@ create_from_pr() {
     echo "$worktree_path"  # SEUL output sur stdout
   else
     msg "Error creating worktree"
+    return 1
+  fi
+}
+
+# Créer un worktree depuis une issue GitHub
+create_from_issue() {
+  local issue_num="$1"
+  local issue_title="$2"
+
+  # Créer un slug à partir du titre
+  local slug=$(echo "$issue_title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-30)
+  local branch_name="feature/${issue_num}-${slug}"
+  local sanitized=$(echo "$branch_name" | sed 's|/|-|g')
+  local worktree_path="$(dirname "$MAIN_REPO")/${REPO_NAME}-${sanitized}"
+
+  # Récupérer la branche par défaut du repo
+  local default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+  if [[ -z "$default_branch" ]]; then
+    default_branch="main"
+  fi
+
+  msg "Creating worktree with new branch '$branch_name' from '$default_branch'..."
+
+  if git worktree add -b "$branch_name" "$worktree_path" "origin/$default_branch" >/dev/null 2>&1; then
+    msg "Worktree created: $worktree_path"
+    msg "Branch: $branch_name"
+    echo "$worktree_path"  # SEUL output sur stdout
+  else
+    msg "Error creating worktree (branch may already exist)"
     return 1
   fi
 }
@@ -321,8 +520,77 @@ menu_review_pr() {
       gh pr view "$pr_num" --web >/dev/null 2>&1
     else
       # Enter = créer le worktree et y aller
-      create_from_pr "$pr_branch"
-      return $?
+      local wt_path
+      wt_path=$(create_from_pr "$pr_branch")
+      local ret=$?
+      if [[ $ret -eq 0 && -n "$wt_path" ]]; then
+        # Proposer intégration Claude
+        prompt_claude_pr_review "$pr_num" "$wt_path"
+        echo "$wt_path"
+      fi
+      return $ret
+    fi
+  done
+}
+
+# =============================================================================
+# Menu From Issue
+# =============================================================================
+
+menu_from_issue() {
+  if ! has_gh; then
+    setup_github_auth
+    if ! has_gh; then
+      return 1
+    fi
+  fi
+
+  msg "Fetching issues..."
+
+  local issues=$(get_formatted_issues)
+  if [[ -z "$issues" ]]; then
+    msg "No open issues"
+    return 1
+  fi
+
+  # Boucle pour permettre Ctrl+O sans quitter
+  while true; do
+    local result=$(echo "$issues" | \
+      fzf --height=70% \
+          --layout=reverse \
+          --border \
+          --header="Open Issues | Enter: create worktree | Ctrl+O: open in browser" \
+          --delimiter='\t' \
+          --with-nth=1,2,3,4 \
+          --preview="bash \"$SCRIPT_PATH\" --issue-preview {1}" \
+          --preview-window=right:50% \
+          --expect=ctrl-o)
+
+    # Première ligne = touche pressée, deuxième ligne = sélection
+    local key=$(echo "$result" | head -1)
+    local selected=$(echo "$result" | tail -n +2)
+
+    if [[ -z "$selected" ]]; then
+      return 1
+    fi
+
+    local issue_num=$(echo "$selected" | cut -f1 | tr -d '#')
+    local issue_title=$(echo "$selected" | cut -f2)
+
+    if [[ "$key" == "ctrl-o" ]]; then
+      # Ouvrir dans le navigateur et continuer la boucle
+      gh issue view "$issue_num" --web >/dev/null 2>&1
+    else
+      # Enter = créer le worktree et y aller
+      local wt_path
+      wt_path=$(create_from_issue "$issue_num" "$issue_title")
+      local ret=$?
+      if [[ $ret -eq 0 && -n "$wt_path" ]]; then
+        # Proposer intégration Claude
+        prompt_claude_issue_plan "$issue_num" "$wt_path"
+        echo "$wt_path"
+      fi
+      return $ret
     fi
   done
 }
@@ -336,6 +604,8 @@ menu_create_worktree() {
     local choice=$(printf "%s\n" \
       "From current branch" \
       "From a branch" \
+      "Create new branch" \
+      "From an issue" \
       "Review a PR" \
       "Back" | \
       fzf --height=40% \
@@ -348,9 +618,18 @@ menu_create_worktree() {
         create_from_current
         return $?
         ;;
-      *"branch"*)
+      "From a branch"*)
         create_from_branch
         return $?
+        ;;
+      "Create new branch"*)
+        create_new_branch
+        return $?
+        ;;
+      "From an issue"*)
+        menu_from_issue
+        local ret=$?
+        [[ $ret -eq 0 ]] && return 0
         ;;
       *"PR"*)
         menu_review_pr
@@ -361,6 +640,125 @@ menu_create_worktree() {
         ;;
       *"Back"*|"")
         return 1
+        ;;
+    esac
+  done
+}
+
+# =============================================================================
+# Stash Management
+# =============================================================================
+
+menu_stash() {
+  while true; do
+    local stashes=$(git stash list 2>/dev/null)
+
+    if [[ -z "$stashes" ]]; then
+      # Proposer de créer un stash
+      local choice=$(printf "%s\n" \
+        "Create a stash" \
+        "Back" | \
+        fzf --height=30% \
+            --layout=reverse \
+            --border \
+            --header="No stashes found")
+
+      case "$choice" in
+        "Create"*)
+          msg "Enter stash message (or leave empty):"
+          local stash_msg
+          read -r stash_msg </dev/tty
+          if [[ -n "$stash_msg" ]]; then
+            git stash push -m "$stash_msg" >/dev/null 2>&1
+          else
+            git stash push >/dev/null 2>&1
+          fi
+          msg "Stash created"
+          ;;
+        *)
+          return 1
+          ;;
+      esac
+      continue
+    fi
+
+    # Afficher les stashes avec actions
+    local result=$(echo "$stashes" | \
+      fzf --height=60% \
+          --layout=reverse \
+          --border \
+          --header="Stashes | Enter: select action | Ctrl+N: new stash" \
+          --preview="
+            stash_ref=\$(echo {} | cut -d: -f1)
+            echo 'Stash content:'
+            echo '=============='
+            git stash show -p \"\$stash_ref\" 2>/dev/null | head -50
+          " \
+          --preview-window=right:60% \
+          --expect=ctrl-n)
+
+    local key=$(echo "$result" | head -1)
+    local selected=$(echo "$result" | tail -n +2)
+
+    if [[ "$key" == "ctrl-n" ]]; then
+      msg "Enter stash message (or leave empty):"
+      local stash_msg
+      read -r stash_msg </dev/tty
+      if [[ -n "$stash_msg" ]]; then
+        git stash push -m "$stash_msg" >/dev/null 2>&1
+      else
+        git stash push >/dev/null 2>&1
+      fi
+      msg "Stash created"
+      continue
+    fi
+
+    if [[ -z "$selected" ]]; then
+      return 1
+    fi
+
+    local stash_ref=$(echo "$selected" | cut -d: -f1)
+
+    # Menu d'actions pour le stash sélectionné
+    local action=$(printf "%s\n" \
+      "Apply (keep stash)" \
+      "Pop (apply and remove)" \
+      "Drop (delete)" \
+      "Show diff" \
+      "Back" | \
+      fzf --height=30% \
+          --layout=reverse \
+          --border \
+          --header="Action for $stash_ref")
+
+    case "$action" in
+      "Apply"*)
+        if git stash apply "$stash_ref" >/dev/null 2>&1; then
+          msg "Stash applied"
+        else
+          msg "Error applying stash (conflicts?)"
+        fi
+        ;;
+      "Pop"*)
+        if git stash pop "$stash_ref" >/dev/null 2>&1; then
+          msg "Stash popped"
+        else
+          msg "Error popping stash (conflicts?)"
+        fi
+        ;;
+      "Drop"*)
+        local confirm=$(printf "%s\n" "Yes, delete" "No, cancel" | \
+          fzf --height=20% --layout=reverse --border --header="Delete $stash_ref?")
+        if [[ "$confirm" == "Yes"* ]]; then
+          git stash drop "$stash_ref" >/dev/null 2>&1
+          msg "Stash dropped"
+        fi
+        ;;
+      "Show diff"*)
+        git stash show -p "$stash_ref" | less
+        ;;
+      *)
+        # Back, continue loop
         ;;
     esac
   done
@@ -461,6 +859,7 @@ main_menu() {
 
     # Construire les actions dynamiquement
     local actions="Create a worktree"
+    actions+=$'\n'"Manage stashes"
     if [[ "$secondary_count" -ge 1 ]]; then
       actions+=$'\n'"Remove a worktree"
     fi
@@ -472,11 +871,12 @@ main_menu() {
     local menu="${worktrees_formatted}
 ${actions}"
 
-    local selected=$(echo "$menu" | \
+    local result=$(echo "$menu" | \
       fzf --height=70% \
           --layout=reverse \
           --border \
-          --header="Worktrees - $REPO_NAME" \
+          --header="Worktrees - $REPO_NAME | Ctrl+E: open in editor" \
+          --expect=ctrl-e \
           --preview="
             line={}
             if [[ \"\$line\" == \"Quit\"* ]]; then
@@ -486,15 +886,20 @@ ${actions}"
               echo ''
               echo '  - From current branch (copy)'
               echo '  - From a branch'
+              echo '  - Create new branch'
               echo '  - Review a PR'
             elif [[ \"\$line\" == \"Remove a\"* ]]; then
               echo 'Remove a secondary worktree'
             elif [[ \"\$line\" == \"Remove all\"* ]]; then
               echo 'Remove all secondary worktrees'
+            elif [[ \"\$line\" == \"Manage stashes\"* ]]; then
+              echo 'Manage git stashes'
             else
               path=\$(echo \"\$line\" | awk '{print \$1}' | sed \"s|^~|\$HOME|\")
               if [[ -d \"\$path\" ]]; then
                 echo \"Path: \$path\"
+                echo ''
+                echo 'Ctrl+E to open in editor'
                 echo ''
                 git -C \"\$path\" log --oneline --graph --color=always -5 2>/dev/null || true
                 echo ''
@@ -503,6 +908,21 @@ ${actions}"
             fi
           " \
           --preview-window=right:50%)
+
+    # Parse key and selection from fzf --expect output
+    local key=$(echo "$result" | head -1)
+    local selected=$(echo "$result" | tail -n +2)
+
+    # Handle Ctrl+E: open in editor and stay in menu
+    if [[ "$key" == "ctrl-e" && -n "$selected" ]]; then
+      local path=$(echo "$selected" | awk '{print $1}' | sed "s|^~|$HOME|")
+      if [[ -d "$path" ]]; then
+        local editor=$(get_editor)
+        msg "Opening in $editor: $path"
+        "$editor" "$path" &
+      fi
+      continue
+    fi
 
     case "$selected" in
       "Create"*)
@@ -514,6 +934,10 @@ ${actions}"
           return 0
         fi
         # Pas de path = retour au menu
+        ;;
+      "Manage stashes"*)
+        menu_stash
+        # Stash menu doesn't return a path, just continue
         ;;
       "Remove a"*)
         local path
@@ -555,4 +979,40 @@ if [[ "$1" == "--pr-preview" ]]; then
   exit 0
 fi
 
-main_menu
+if [[ "$1" == "--issue-preview" ]]; then
+  issue_preview "$2"
+  exit 0
+fi
+
+# Quick switch: wt <name> fuzzy matches on worktrees
+if [[ -n "$1" && "$1" != "--"* ]]; then
+  # Format worktrees for matching
+  worktrees_list=$(format_all_worktrees)
+  match=$(echo "$worktrees_list" | fzf --filter="$1" | head -1)
+  if [[ -n "$match" ]]; then
+    path=$(echo "$match" | awk '{print $1}' | sed "s|^~|$HOME|")
+    if [[ -d "$path" ]]; then
+      echo "$path"
+      exit 0
+    fi
+  fi
+  msg "No worktree matching '$1'"
+  exit 1
+fi
+
+# Run main menu and capture result
+result=$(main_menu)
+
+if [[ -n "$result" ]]; then
+  echo "$result"
+
+  # Show setup hint if not running through wrapper
+  if [[ -z "$WT_WRAPPED" ]]; then
+    msg ""
+    msg "Tip: To enable auto-cd, add this to your .zshrc:"
+    msg ""
+    msg "  eval \"\$(wt-core --shell-init)\""
+    msg ""
+    msg "Then run: source ~/.zshrc"
+  fi
+fi
