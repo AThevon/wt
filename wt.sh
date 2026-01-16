@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.1.9"
+VERSION="1.2.0"
 
 # =============================================================================
 # Options de ligne de commande
@@ -952,14 +952,15 @@ ${actions}"
 
     case "$selected" in
       "Create"*)
-        # Capture stdout (le path) séparément
-        local path
-        path=$(menu_create_worktree)
-        if [[ -n "$path" && -d "$path" ]]; then
-          echo "$path"  # Propager le path vers la fonction shell
+        # Capture stdout (le path + éventuellement CLAUDE marker)
+        local output
+        output=$(menu_create_worktree)
+        if [[ -n "$output" ]]; then
+          # Passer tout l'output (path + CLAUDE marker) au wrapper
+          echo "$output"
           return 0
         fi
-        # Pas de path = retour au menu
+        # Pas d'output = retour au menu
         ;;
       "Manage stashes"*)
         menu_stash

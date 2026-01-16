@@ -9,7 +9,7 @@ function wt() {
   local target=""
   local claude_cmd=""
 
-  # Parse output: path on first line, optional CLAUDE marker on second
+  # Parse output: path and optional CLAUDE marker (can be in any order)
   while IFS= read -r line; do
     if [[ "$line" == CLAUDE:* ]]; then
       claude_cmd="$line"

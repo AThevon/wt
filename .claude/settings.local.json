@@ -4,7 +4,9 @@
       "Bash(bash -n:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(curl:*)",
+      "Bash(shasum:*)"
     ]
   }
 }
