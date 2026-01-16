@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.0.0"
+VERSION="1.0.1"
 
 # =============================================================================
 # Options de ligne de commande
@@ -162,16 +162,17 @@ get_formatted_prs() {
     return 1
   fi
 
-  gh pr list --limit 20 --json number,title,headRefName,author,reviewDecision,statusCheckRollup 2>/dev/null | \
+  gh pr list --limit 20 --json number,title,headRefName,author,reviewDecision,statusCheckRollup,isDraft 2>/dev/null | \
     /usr/bin/jq -r '.[] |
-      (if (.statusCheckRollup | length) == 0 then "?"
-       elif ([.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length) > 0 then "x"
-       elif ([.statusCheckRollup[] | select(.status == "COMPLETED")] | length) < (.statusCheckRollup | length) then "~"
-       else "+" end) as $ci |
-      (if .reviewDecision == "APPROVED" then "ok"
-       elif .reviewDecision == "CHANGES_REQUESTED" then "!!"
-       else "  " end) as $review |
-      "#\(.number)\t\($ci)\($review)\t\(.title[0:45])\t@\(.author.login)\t\(.headRefName)"'
+      (if .isDraft then "📝"
+       elif (.statusCheckRollup | length) == 0 then "⚪"
+       elif ([.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length) > 0 then "❌"
+       elif ([.statusCheckRollup[] | select(.status == "COMPLETED")] | length) < (.statusCheckRollup | length) then "⏳"
+       else "✅" end) as $ci |
+      (if .reviewDecision == "APPROVED" then "✓"
+       elif .reviewDecision == "CHANGES_REQUESTED" then "✗"
+       else " " end) as $review |
+      "#\(.number)\t\($ci) \($review)\t\(.title[0:50])\t@\(.author.login)\t\(.headRefName)"'
 }
 
 pr_preview() {

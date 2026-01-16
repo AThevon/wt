@@ -1,54 +1,147 @@
-# wt - Git Worktree Manager
+# wt
 
-Interactive git worktree manager with fzf and GitHub PR integration.
+A fast, interactive git worktree manager with fzf and GitHub PR integration.
+
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
+
+## Why wt?
+
+Git worktrees are powerful but managing them manually is tedious. `wt` provides:
+
+- **One command** to navigate, create, and delete worktrees
+- **PR review workflow** - create a worktree directly from a GitHub PR
+- **Automatic navigation** - `cd` into worktrees after selection/creation
+- **Smart naming** - worktrees are named consistently (e.g., `myapp-reviewing-feature-branch`)
 
 ## Installation
 
 ```bash
-brew tap YOUR_USERNAME/wt
+brew tap AThevon/wt
 brew install wt
 ```
 
-Then add to your `.zshrc`:
+Add to your `~/.zshrc`:
 
 ```bash
 eval "$(wt-core --shell-init)"
 ```
 
-## Features
-
-- Navigate between worktrees with fzf
-- Create worktrees from current branch, any branch, or a PR
-- Review PRs directly (creates a worktree with `reviewing-` prefix)
-- Delete worktrees (single or all)
-- Automatic `cd` to selected/created worktree
+Restart your terminal or run `source ~/.zshrc`.
 
 ## Usage
 
-Run `wt` in any git repository to open the interactive menu.
+Run `wt` in any git repository:
 
-### Keyboard shortcuts
+```bash
+wt
+```
 
-In PR review mode:
-- `Enter` - Create worktree for selected PR
-- `Ctrl+O` - Open PR in browser
+### Main Menu
+
+```
+┌────────────────────────────────────────────────────────┐
+│ Worktrees - myapp                                      │
+├────────────────────────────────────────────────────────┤
+│ > ~/projects/myapp                          [main]     │
+│   ~/projects/myapp-feature-auth             [feature]  │
+│   ~/projects/myapp-reviewing-fix-bug        [fix/bug]  │
+├────────────────────────────────────────────────────────┤
+│   Create a worktree                                    │
+│   Remove a worktree                                    │
+│   Quit                                                 │
+└────────────────────────────────────────────────────────┘
+```
+
+### PR Review
+
+When selecting "Review a PR", you'll see all open PRs with their status:
+
+```
+┌────────────────────────────────────────────────────────┐
+│ Open PRs | Enter: create worktree | Ctrl+O: browser    │
+├────────────────────────────────────────────────────────┤
+│ > #142  ✅     feat: add dark mode           @john     │
+│   #140  ❌     fix: memory leak              @jane     │
+│   #138  ⏳ ✓   chore: update deps            @bob      │
+└────────────────────────────────────────────────────────┘
+```
+
+**Status icons:**
+| Icon | Meaning |
+|------|---------|
+| ✅ | All CI checks passed |
+| ❌ | CI checks failed |
+| ⏳ | CI checks running |
+| ⚪ | No CI checks |
+| 📝 | Draft PR |
+| ✓ | PR approved |
+| ✗ | Changes requested |
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Select / Create worktree |
+| `Ctrl+O` | Open PR in browser (PR view only) |
+| `Esc` | Go back / Cancel |
+
+## Features
+
+### Create Worktrees
+
+- **From current branch** - Creates a copy with timestamp
+- **From any branch** - Browse all local/remote branches
+- **From a PR** - Creates worktree with `reviewing-` prefix
+
+### Smart Worktree Placement
+
+Worktrees are always created next to your main repository:
+
+```
+~/projects/
+├── myapp/                    # Main repo
+├── myapp-feature-auth/       # From branch
+├── myapp-reviewing-fix-bug/  # From PR
+└── myapp-main-copy-20250116/ # From current
+```
+
+### GitHub Integration
+
+On first use, if GitHub CLI is not configured, `wt` will guide you through authentication:
+
+```
+┌────────────────────────────────────────────────────────┐
+│ GitHub CLI is not configured                           │
+├────────────────────────────────────────────────────────┤
+│ > Login via browser (recommended)                      │
+│   Login with a token                                   │
+│   Continue without GitHub                              │
+│   Quit                                                 │
+└────────────────────────────────────────────────────────┘
+```
 
 ## Dependencies
 
-- `fzf` - Fuzzy finder
-- `gh` - GitHub CLI (optional, for PR features)
-- `jq` - JSON processor
+| Dependency | Required | Purpose |
+|------------|----------|---------|
+| [fzf](https://github.com/junegunn/fzf) | Yes | Interactive selection |
+| [gh](https://cli.github.com/) | No | GitHub PR integration |
+| [jq](https://stedolan.github.io/jq/) | No | JSON parsing for PRs |
 
-## Manual installation
+All dependencies are automatically installed via Homebrew.
+
+## Uninstall
 
 ```bash
-# Clone the repo
-git clone https://github.com/YOUR_USERNAME/wt.git
-cd wt
+brew uninstall wt
+brew untap AThevon/wt
+```
 
-# Add to your .zshrc
-echo 'source /path/to/wt/completions/wt.zsh' >> ~/.zshrc
-echo 'alias wt-core="/path/to/wt/wt.sh"' >> ~/.zshrc
+Remove from `~/.zshrc`:
+```bash
+eval "$(wt-core --shell-init)"
 ```
 
 ## License
