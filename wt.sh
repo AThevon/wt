@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.1.0"
+VERSION="1.1.1"
 
 # =============================================================================
 # Options de ligne de commande
@@ -263,21 +263,9 @@ prompt_claude_pr_review() {
     fzf --height=20% --layout=reverse --border --header="Launch Claude Code for PR review?")
 
   if [[ "$choice" == "Yes"* ]]; then
-    # Récupérer les infos de la PR
-    local pr_info=$(gh pr view "$pr_num" --json title,body,author 2>/dev/null)
-
     cd "$wt_path"
-    claude --print "You are reviewing PR #$pr_num. Here's the context:
-
-$pr_info
-
-Please review this PR:
-1. Analyze the code changes for bugs, security issues, and best practices
-2. Check for edge cases and error handling
-3. Suggest improvements if any
-4. Give an overall assessment
-
-The diff is available via 'gh pr diff $pr_num'. Start by examining the changes."
+    msg "Starting Claude Code for PR #$pr_num review..."
+    claude -p "You are reviewing PR #$pr_num. Run 'gh pr view $pr_num' and 'gh pr diff $pr_num' to get context, then analyze the code changes for bugs, security issues, and best practices." </dev/tty
   fi
 }
 
@@ -293,21 +281,9 @@ prompt_claude_issue_plan() {
     fzf --height=20% --layout=reverse --border --header="Launch Claude Code to plan this issue?")
 
   if [[ "$choice" == "Yes"* ]]; then
-    # Récupérer les infos de l'issue
-    local issue_info=$(gh issue view "$issue_num" --json title,body,labels,comments 2>/dev/null)
-
     cd "$wt_path"
-    claude --print "You are working on Issue #$issue_num. Here's the context:
-
-$issue_info
-
-Please:
-1. Analyze the issue requirements
-2. Explore the codebase to understand the current implementation
-3. Propose a detailed implementation plan
-4. Identify potential challenges or edge cases
-
-Start by reading the issue carefully and exploring relevant files."
+    msg "Starting Claude Code for Issue #$issue_num planning..."
+    claude -p "You are working on Issue #$issue_num. Run 'gh issue view $issue_num' to read the issue, then explore the codebase and propose a detailed implementation plan." </dev/tty
   fi
 }
 
