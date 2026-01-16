@@ -4,7 +4,7 @@ A fast, interactive git worktree manager with fzf, GitHub integration, and Claud
 
 ![Version](https://img.shields.io/badge/version-1.2.1-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey)
 
 ## Why wt?
 
@@ -19,12 +19,24 @@ Git worktrees are powerful but managing them manually is tedious. `wt` provides:
 
 ## Installation
 
+### macOS (Homebrew)
+
 ```bash
 brew tap AThevon/wt
 brew install wt
 ```
 
-Add to your `~/.zshrc`:
+### Linux / WSL
+
+```bash
+git clone https://github.com/AThevon/wt.git
+cd wt
+./install-linux.sh
+```
+
+### Shell setup
+
+Add to your `~/.zshrc` (or `~/.bashrc`):
 
 ```bash
 eval "$(wt-core --shell-init)"
@@ -180,16 +192,27 @@ Worktrees are always created next to your main repository:
 | [jq](https://stedolan.github.io/jq/) | No | JSON parsing |
 | [claude](https://claude.ai/code) | No | Claude Code integration |
 
-All dependencies except Claude are automatically installed via Homebrew.
+**macOS:** All dependencies except Claude are automatically installed via Homebrew.
+
+**Linux/WSL:** The install script installs required dependencies via apt. For `gh`, see [GitHub CLI installation](https://github.com/cli/cli/blob/trunk/docs/install_linux.md).
 
 ## Uninstall
+
+### macOS
 
 ```bash
 brew uninstall wt
 brew untap AThevon/wt
 ```
 
-Remove from `~/.zshrc`:
+### Linux / WSL
+
+```bash
+sudo rm /usr/local/bin/wt-core
+```
+
+Then remove from `~/.zshrc` (or `~/.bashrc`):
+
 ```bash
 eval "$(wt-core --shell-init)"
 ```
