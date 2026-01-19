@@ -215,7 +215,7 @@ get_formatted_prs() {
     return 1
   fi
 
-  gh pr list --limit 20 --json number,title,headRefName,author,reviewDecision,statusCheckRollup,isDraft 2>/dev/null | \
+  gh pr list --json number,title,headRefName,author,reviewDecision,statusCheckRollup,isDraft 2>/dev/null | \
     /usr/bin/jq -r '.[] |
       (if .isDraft then "📝"
        elif (.statusCheckRollup | length) == 0 then "⚪"
