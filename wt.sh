@@ -1714,7 +1714,12 @@ main_menu() {
         ;;
     esac
 
-    # Skip empty lines (gap separator)
+    # If fzf was cancelled (Escape/Ctrl+C) and no shortcut was pressed, exit
+    if [[ -z "$key" && ( -z "$selected" || "$selected" =~ ^[[:space:]]*$ ) ]]; then
+      return 0
+    fi
+
+    # Skip empty lines (gap separator) - only if user actually selected it
     if [[ -z "$selected" || "$selected" =~ ^[[:space:]]*$ ]]; then
       continue
     fi
