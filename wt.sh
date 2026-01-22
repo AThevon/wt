@@ -146,17 +146,11 @@ print_logo() {
   fi
 
   cat >&2 << 'EOF'
-            ;        GEEEEEEEL
-          .DL        ,;;L#K;;.
-  f.     :K#L     LWL   t#E
-  EW:   ;W##L   .E#f    t#E
-  E#t  t#KE#L  ,W#;     t#E
-  E#t f#D.L#L t#K:      t#E
-  E#jG#f  L#LL#G        t#E
-  E###;   L###j         t#E
-  E#K:    L#W;          t#E
-  EG      LE.            fE
-  ;       ;@              :
+▄▄▌ ▐ ▄▌▄▄▄▄▄
+██· █▌▐█•██
+██▪▐█▐▐▌ ▐█.▪
+▐█▌██▐█▌ ▐█▌·
+ ▀▀▀▀ ▀▪ ▀▀▀
 EOF
 
   if $use_color; then
