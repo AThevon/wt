@@ -1632,28 +1632,42 @@ main_menu() {
               path=\$(echo \"\$line\" | awk '{print \$1}' | sed \"s|^~|\$HOME|\")
               if [[ -d \"\$path\" ]]; then
                 branch=\$(git -C \"\$path\" branch --show-current 2>/dev/null || echo 'detached')
-                echo \"> \$path\"
+
+                # Header
+                echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
                 echo \"  Branch: \$branch\"
+                echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
                 echo ''
-                # Status
+
+                # Sync status with remote
+                tracking=\$(git -C \"\$path\" rev-parse --abbrev-ref @{upstream} 2>/dev/null)
+                if [[ -n \"\$tracking\" ]]; then
+                  ahead=\$(git -C \"\$path\" rev-list --count @{upstream}..HEAD 2>/dev/null || echo 0)
+                  behind=\$(git -C \"\$path\" rev-list --count HEAD..@{upstream} 2>/dev/null || echo 0)
+                  if [[ \$ahead -gt 0 && \$behind -gt 0 ]]; then
+                    echo \"  ↑\$ahead ↓\$behind  (diverged from \$tracking)\"
+                  elif [[ \$ahead -gt 0 ]]; then
+                    echo \"  ↑\$ahead ahead of \$tracking\"
+                  elif [[ \$behind -gt 0 ]]; then
+                    echo \"  ↓\$behind behind \$tracking\"
+                  else
+                    echo \"  ✓ In sync with \$tracking\"
+                  fi
+                  echo ''
+                fi
+
+                # Uncommitted changes
                 if [[ -n \$(git -C \"\$path\" status --porcelain 2>/dev/null) ]]; then
                   echo '  Uncommitted changes:'
                   git -C \"\$path\" status --short 2>/dev/null | /usr/bin/head -8
                   echo ''
                 fi
-                # Ahead/behind
-                tracking=\$(git -C \"\$path\" rev-parse --abbrev-ref @{upstream} 2>/dev/null)
-                if [[ -n \"\$tracking\" ]]; then
-                  ahead=\$(git -C \"\$path\" rev-list --count @{upstream}..HEAD 2>/dev/null || echo 0)
-                  behind=\$(git -C \"\$path\" rev-list --count HEAD..@{upstream} 2>/dev/null || echo 0)
-                  if [[ \$ahead -gt 0 || \$behind -gt 0 ]]; then
-                    echo \"  +\$ahead -\$behind vs \$tracking\"
-                    echo ''
-                  fi
-                fi
+
                 # Recent commits
                 echo '  Recent commits:'
-                git -C \"\$path\" log --oneline --color=always -5 2>/dev/null
+                git -C \"\$path\" log --oneline --graph --color=always -8 2>/dev/null
+              else
+                echo 'Invalid path'
               fi
             fi
           " \
