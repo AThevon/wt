@@ -131,6 +131,37 @@ msg() {
   echo "$@" >&2
 }
 
+# Print 3D ASCII logo
+print_logo() {
+  local use_color=false
+
+  # Check if we should use colors (stderr is a terminal and TERM is not dumb)
+  if [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then
+    use_color=true
+  fi
+
+  if $use_color; then
+    # Cyan color for the logo, bold
+    echo -e "\033[1;36m" >&2
+  fi
+
+  cat >&2 << 'EOF'
+██╗    ██╗████████╗
+██║    ██║╚══██╔══╝
+██║ █╗ ██║   ██║
+╚██╗████╔╝   ██║
+ ╚═╝╚══╝    ╚═╝
+EOF
+
+  if $use_color; then
+    # Reset color, then dim for subtitle
+    echo -e "\033[0m\033[2m  Git Worktree Manager v$VERSION\033[0m" >&2
+  else
+    msg "  Git Worktree Manager v$VERSION"
+  fi
+  msg ""
+}
+
 # =============================================================================
 # GitHub Auth Setup
 # =============================================================================
@@ -876,6 +907,9 @@ main_menu() {
     msg "Install with: brew install fzf"
     exit 1
   fi
+
+  # Display logo on first launch
+  print_logo
 
   while true; do
     local worktrees_formatted=$(format_all_worktrees)
