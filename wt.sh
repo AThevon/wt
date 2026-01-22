@@ -402,9 +402,10 @@ if [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then
   C_MAGENTA='\033[35m'
   C_CYAN='\033[36m'
   C_WHITE='\033[37m'
+  C_ORANGE='\033[1;38;5;208m'
 else
   C_RESET='' C_BOLD='' C_DIM='' C_RED='' C_GREEN=''
-  C_YELLOW='' C_BLUE='' C_MAGENTA='' C_CYAN='' C_WHITE=''
+  C_YELLOW='' C_BLUE='' C_MAGENTA='' C_CYAN='' C_WHITE='' C_ORANGE=''
 fi
 
 # ASCII Art Logo
@@ -476,7 +477,7 @@ loader_start() {
       local bar=""
       for ((j=0; j<filled; j++)); do bar+="▓"; done
       for ((j=0; j<empty; j++)); do bar+="░"; done
-      printf "\r  ${C_CYAN}%s${C_RESET} %s" "$bar" "$msg" >&2
+      printf "\r  ${C_ORANGE}%s${C_RESET} %s" "$bar" "$msg" >&2
       sleep 0.08
       ((i++))
     done
