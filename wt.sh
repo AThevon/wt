@@ -1569,9 +1569,9 @@ main_menu() {
     local secondary_count=$(get_secondary_worktrees | wc -l | tr -d ' ')
     local worktree_count=$(get_worktrees | wc -l | tr -d ' ')
 
-    # Construire les actions (ligne vide = séparateur non-sélectionnable)
+    # Construire les actions
     local actions=""
-    actions+=$'\n'""
+    actions+=$'\n'"<<>><<>><<>><<>><<>><<>><<>><<>><<>><<>><<>><<>><<>>"
     actions+=$'\n'"  Create a worktree"
     actions+=$'\n'"  Manage stashes"
     if [[ "$secondary_count" -ge 1 ]]; then
@@ -1592,6 +1592,10 @@ main_menu() {
           --expect=ctrl-e,ctrl-n,ctrl-p,ctrl-g,ctrl-d \
           --preview="
             line={}
+            # Skip divider
+            if [[ \"\$line\" == \"<<>>\"* ]]; then
+              exit 0
+            fi
             # Clean line (remove leading spaces for actions)
             clean_line=\$(echo \"\$line\" | sed 's/^  //')
             if [[ \"\$clean_line\" == \"Quit\"* ]]; then
@@ -1733,8 +1737,8 @@ main_menu() {
       return 0
     fi
 
-    # Skip empty lines (gap separator) - only if user actually selected it
-    if [[ -z "$selected" || "$selected" =~ ^[[:space:]]*$ ]]; then
+    # Skip divider line
+    if [[ "$selected" == "<<>>"* ]]; then
       continue
     fi
 
