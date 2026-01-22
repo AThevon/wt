@@ -408,15 +408,6 @@ else
   C_YELLOW='' C_BLUE='' C_MAGENTA='' C_CYAN='' C_WHITE='' C_ORANGE=''
 fi
 
-# ASCII Art Logo
-LOGO="
-  ${C_CYAN}┬ ┬┌┬┐${C_RESET}
-  ${C_CYAN}│││ │ ${C_RESET} ${C_DIM}Git Worktree Manager${C_RESET}
-  ${C_CYAN}└┴┘ ┴${C_RESET}
-"
-
-LOGO_SMALL="${C_CYAN}wt${C_RESET} ${C_DIM}│${C_RESET}"
-
 # =============================================================================
 # Helpers - TOUT sur stderr sauf le path final
 # =============================================================================
@@ -1810,9 +1801,6 @@ if [[ -n "$1" && "$1" != "--"* ]]; then
   msg "No worktree matching '$1'"
   exit 1
 fi
-
-# Show splash
-msg "$LOGO"
 
 # Run main menu and capture result
 result=$(main_menu)
