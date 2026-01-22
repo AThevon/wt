@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.3.0"
+VERSION="1.3.1"
 
 # =============================================================================
 # Options de ligne de commande
@@ -227,10 +227,19 @@ EOF
 fi
 
 if [[ "$1" == "--setup" ]]; then
-  echo ""
-  echo "wt setup"
-  echo "--------"
-  echo ""
+  # Colors for setup (defined early since msg() isn't available yet)
+  if [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then
+    _GREEN=$'\033[32m'
+    _RESET=$'\033[0m'
+  else
+    _GREEN='' _RESET=''
+  fi
+  _msg() { echo -e "$@" >&2; }
+
+  _msg ""
+  _msg "wt setup"
+  _msg "--------"
+  _msg ""
 
   # Detect shell
   shell_name=$(basename "$SHELL")
@@ -238,43 +247,43 @@ if [[ "$1" == "--setup" ]]; then
     zsh)  rc_file="$HOME/.zshrc" ;;
     bash) rc_file="$HOME/.bashrc" ;;
     *)
-      echo "[!!] Unsupported shell: $shell_name"
-      echo "     Supported: zsh, bash"
+      _msg "[!!] Unsupported shell: $shell_name"
+      _msg "     Supported: zsh, bash"
       exit 1
       ;;
   esac
-  echo "[ok] Shell: $shell_name"
-  echo "[ok] Config: $rc_file"
-  echo ""
+  _msg "[ok] Shell: $shell_name"
+  _msg "[ok] Config: $rc_file"
+  _msg ""
 
   # Check dependencies
-  echo "Dependencies:"
+  _msg "Dependencies:"
   deps_ok=true
   if command -v fzf &>/dev/null; then
-    echo "  [ok] fzf"
+    _msg "  [ok] fzf"
   else
-    echo "  [!!] fzf (required) - install with: brew install fzf"
+    _msg "  [!!] fzf (required) - install with: brew install fzf"
     deps_ok=false
   fi
   if command -v gh &>/dev/null; then
-    echo "  [ok] gh"
+    _msg "  [ok] gh"
   else
-    echo "  [--] gh (optional) - install with: brew install gh"
+    _msg "  [--] gh (optional) - install with: brew install gh"
   fi
   if command -v jq &>/dev/null; then
-    echo "  [ok] jq"
+    _msg "  [ok] jq"
   else
-    echo "  [--] jq (optional) - install with: brew install jq"
+    _msg "  [--] jq (optional) - install with: brew install jq"
   fi
   if command -v claude &>/dev/null; then
-    echo "  [ok] claude"
+    _msg "  [ok] claude"
   else
-    echo "  [--] claude (optional)"
+    _msg "  [--] claude (optional)"
   fi
-  echo ""
+  _msg ""
 
   if [[ "$deps_ok" == false ]]; then
-    echo "[!!] Install required dependencies first"
+    _msg "[!!] Install required dependencies first"
     exit 1
   fi
 
@@ -282,7 +291,7 @@ if [[ "$1" == "--setup" ]]; then
   script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 
   if ! command -v wt-core &>/dev/null; then
-    echo "Setting up wt-core command..."
+    _msg "Setting up wt-core command..."
 
     # Determine install location
     if [[ -d "/usr/local/bin" && -w "/usr/local/bin" ]]; then
@@ -296,43 +305,44 @@ if [[ "$1" == "--setup" ]]; then
 
     # Create symlink
     ln -sf "$script_path" "$install_dir/wt-core"
-    echo "[ok] Created: $install_dir/wt-core -> $script_path"
+    _msg "[ok] Created: $install_dir/wt-core -> $script_path"
 
     # Check if install_dir is in PATH
     if [[ ":$PATH:" != *":$install_dir:"* ]]; then
-      echo ""
-      echo "[!!] $install_dir is not in your PATH"
-      echo "     Add this to your $rc_file:"
-      echo ""
-      echo "     export PATH=\"$install_dir:\$PATH\""
-      echo ""
+      _msg ""
+      _msg "[!!] $install_dir is not in your PATH"
+      _msg "     Add this to your $rc_file:"
+      _msg ""
+      _msg "     export PATH=\"$install_dir:\$PATH\""
+      _msg ""
     fi
   else
-    echo "[ok] wt-core already in PATH"
+    _msg "[ok] wt-core already in PATH"
   fi
 
   # Check if already configured
-  init_line='eval "$(wt-core --shell-init)"'
+  init_line='command -v wt-core &>/dev/null && eval "$(wt-core --shell-init)"'
   if grep -q "wt-core --shell-init" "$rc_file" 2>/dev/null; then
-    echo "[ok] Already configured in $rc_file"
+    _msg "[ok] Already configured in $rc_file"
   else
-    echo ""
-    echo "Adding wt to $rc_file..."
+    _msg ""
+    _msg "Adding wt to $rc_file..."
     echo "" >> "$rc_file"
     echo "# wt - Git Worktree Manager" >> "$rc_file"
     echo "$init_line" >> "$rc_file"
-    echo "[ok] Added to $rc_file"
+    _msg "[ok] Added to $rc_file"
   fi
 
-  echo ""
-  echo "--------"
-  echo ""
-  echo "To activate now, run:"
-  echo ""
-  echo "  source $rc_file"
-  echo ""
-  echo "Or restart your terminal."
-  echo ""
+  _msg ""
+  _msg "--------"
+  _msg "${_GREEN}Setup complete!${_RESET}"
+  _msg ""
+  _msg "To activate now, run:"
+  _msg ""
+  _msg "  source $rc_file"
+  _msg ""
+  _msg "Or restart your terminal."
+  _msg ""
   exit 0
 fi
 
@@ -1084,18 +1094,24 @@ menu_review_pr() {
           *"Fix CI"*)
             if has_claude; then
               echo "CLAUDE:ci-fix:$pr_num"
+            else
+              msg_warn "Claude not installed - skipping auto-fix"
             fi
             ;;
           *"Review"*)
             if has_claude; then
               local mode=$(select_claude_mode "pr-review" "$pr_num")
               [[ -n "$mode" ]] && echo "CLAUDE:pr-review:$pr_num:$mode"
+            else
+              msg_warn "Claude not installed - skipping review"
             fi
             ;;
           *"Launch"*)
             if has_claude; then
               local mode=$(select_claude_mode "pr-work" "$pr_num")
               [[ -n "$mode" ]] && echo "CLAUDE:pr-work:$pr_num:$mode"
+            else
+              msg_warn "Claude not installed"
             fi
             ;;
         esac
@@ -1221,12 +1237,16 @@ menu_from_issue() {
           *"Auto-resolve"*)
             if has_claude; then
               echo "CLAUDE:issue-auto:$issue_num"
+            else
+              msg_warn "Claude not installed - skipping auto-resolve"
             fi
             ;;
           *"Launch"*)
             if has_claude; then
               local mode=$(select_claude_mode "issue-work" "$issue_num")
               [[ -n "$mode" ]] && echo "CLAUDE:issue-work:$issue_num:$mode"
+            else
+              msg_warn "Claude not installed"
             fi
             ;;
         esac
@@ -1574,7 +1594,7 @@ main_menu() {
     local menu="${worktrees_formatted}${actions}"
 
     # Header avec raccourcis clavier
-    local header="$REPO_NAME │ ^E: editor │ ^N: new │ ^P: PRs │ ^G: issues │ ^D: delete"
+    local header="${C_BOLD}$REPO_NAME${C_RESET}  ${C_DIM}^E editor · ^N new · ^P PRs · ^G issues · ^D delete${C_RESET}"
 
     local result=$(echo "$menu" | \
       fzf --height=70% \

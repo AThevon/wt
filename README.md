@@ -1,8 +1,22 @@
 # wt
 
+```
+                                   __,,,,_
+                    _ __..-;''`--/'/ /.',-`-.
+                (`/' ` |  \ \ \\ / / / / .-'/`,_
+               /'`\ \   |  \ | \| // // / -.,/_,'-,
+              /<7' ;  \ \  | ; ||/ /| | \/    |`-/,/-.,_,/')
+             /  _.-, `,-\,__|  _-| / \ \/|_/  |    '-/.;.\'
+             `-`  f/ ;      / __/ \__ `/ |__/ |
+  _      ________ `-'      |  -| =|\_  \  |-' |
+ | | /| / /_  __/       __/   /_..-' `  ),'  //
+ | |/ |/ / / /         ((__.-'((___..-'' \__.'
+ |__/|__/ /_/
+```
+
 A fast, interactive git worktree manager with fzf, GitHub integration, and Claude Code support.
 
-![Version](https://img.shields.io/badge/version-1.2.1-blue)
+![Version](https://img.shields.io/badge/version-1.3.1-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey)
 
@@ -13,7 +27,7 @@ Git worktrees are powerful but managing them manually is tedious. `wt` provides:
 - **One command** to navigate, create, and delete worktrees
 - **PR review workflow** - create a worktree directly from a GitHub PR
 - **Issue workflow** - create a worktree from a GitHub issue with auto-named branch
-- **Claude Code integration** - automatically start Claude with context for PR review or issue planning
+- **Claude Code integration** - launch Claude with context for PR review, CI fixing, or issue auto-resolve
 - **Quick switch** - `wt <name>` to fuzzy-match and jump to a worktree
 - **Dirty indicator** - see which worktrees have uncommitted changes
 
@@ -26,6 +40,17 @@ brew tap AThevon/wt
 brew install wt
 ```
 
+Then run the setup command:
+
+```bash
+wt --setup
+```
+
+This will:
+- Check dependencies (fzf required, gh/jq/claude optional)
+- Create the `wt-core` symlink if needed
+- Add the shell initialization to your `~/.zshrc` or `~/.bashrc`
+
 ### Linux / WSL
 
 ```bash
@@ -34,9 +59,15 @@ cd wt
 ./install-linux.sh
 ```
 
-### Shell setup
+Then run:
 
-Add to your `~/.zshrc` (or `~/.bashrc`):
+```bash
+wt --setup
+```
+
+### Manual Shell Setup
+
+If you prefer manual setup, add to your `~/.zshrc` (or `~/.bashrc`):
 
 ```bash
 eval "$(wt-core --shell-init)"
@@ -63,24 +94,54 @@ wt feat    # Fuzzy matches "feature-auth", "feat-login", etc.
 wt review  # Jumps to "reviewing-fix-bug"
 ```
 
+### Command Line Options
+
+| Option | Description |
+|--------|-------------|
+| `wt` | Interactive menu |
+| `wt <name>` | Quick switch to matching worktree |
+| `wt --setup` | One-time installation |
+| `wt --help` | Show help |
+| `wt --version` | Show version |
+
 ## Main Menu
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│ Worktrees - myapp | Ctrl+E: open in editor                 │
-├────────────────────────────────────────────────────────────┤
-│ > ~/projects/myapp                              [main]     │
-│   ~/projects/myapp-feature-auth              *  [feature]  │
-│   ~/projects/myapp-reviewing-fix-bug            [fix/bug]  │
-├────────────────────────────────────────────────────────────┤
-│   Create a worktree                                        │
-│   Manage stashes                                           │
-│   Remove a worktree                                        │
-│   Quit                                                     │
-└────────────────────────────────────────────────────────────┘
+                                   __,,,,_
+                    _ __..-;''`--/'/ /.',-`-.
+                ...
+
+  Git Worktree Manager v1.3.0
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ myapp │ ^E: editor │ ^N: new │ ^P: PRs │ ^G: issues │ ^D: delete        │
+├─────────────────────────────────────────────────────────────────────────┤
+│ > ~/projects/myapp                                          [main]      │
+│   ~/projects/myapp-feature-auth                          *  [feature]   │
+│   ~/projects/myapp-reviewing-fix-bug                        [fix/bug]   │
+│ -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-     │
+│   Create a worktree                                                     │
+│   Manage stashes                                                        │
+│   Delete worktree(s)                                                    │
+│   Quit                                                                  │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 The `*` indicates worktrees with uncommitted changes.
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Select / Navigate to worktree |
+| `Ctrl+E` | Open worktree in editor |
+| `Ctrl+N` | Create new worktree |
+| `Ctrl+P` | List PRs |
+| `Ctrl+G` | List GitHub issues |
+| `Ctrl+D` | Delete worktree(s) |
+| `Ctrl+O` | Open in browser (PR/Issue view) |
+| `Tab` | Multi-select (delete mode) |
+| `Esc` | Go back / Cancel |
 
 ## Features
 
@@ -88,9 +149,9 @@ The `*` indicates worktrees with uncommitted changes.
 
 | Option | Description |
 |--------|-------------|
-| From current branch | Creates a copy with timestamp |
-| From a branch | Browse all local/remote branches |
-| Create new branch | Enter name, select base branch |
+| New branch | Enter name, select base branch |
+| From existing branch | Browse all local/remote branches |
+| From current (quick copy) | Creates a copy with timestamp |
 | From an issue | Creates `feature/{issue-num}-{title}` branch |
 | Review a PR | Creates worktree with `reviewing-` prefix |
 
@@ -100,7 +161,7 @@ Select "From an issue" to see open issues:
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│ Open Issues | Enter: create worktree | Ctrl+O: browser     │
+│ Open Issues | Enter: select | Ctrl+O: open in browser      │
 ├────────────────────────────────────────────────────────────┤
 │ > #7   Add dark mode support                    @john      │
 │   #5   Fix memory leak in parser                @jane      │
@@ -108,63 +169,103 @@ Select "From an issue" to see open issues:
 └────────────────────────────────────────────────────────────┘
 ```
 
-Selecting an issue creates a branch like `feature/7-add-dark-mode-support`.
+After selecting an issue, choose an action:
+
+| Action | Description |
+|--------|-------------|
+| **Auto-resolve (full auto)** | Claude reads the issue, implements it, and creates a PR automatically |
+| **Launch Claude** | Start Claude with issue context in your preferred mode |
+| **Just create worktree** | Create the branch without Claude |
 
 ### PR Review
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│ Open PRs | Enter: create worktree | Ctrl+O: browser        │
+│ Open PRs | Enter: select | Ctrl+O: open in browser         │
 ├────────────────────────────────────────────────────────────┤
-│ > #142  ✅     feat: add dark mode              @john      │
-│   #140  ❌     fix: memory leak                 @jane      │
-│   #138  ⏳ ✓   chore: update deps               @bob       │
+│ > #142  [ok] ✓   feat: add dark mode            @john      │
+│   #140  [fail]   fix: memory leak               @jane      │
+│   #138  [..]     chore: update deps             @bob       │
 └────────────────────────────────────────────────────────────┘
 ```
 
-**Status icons:**
-| Icon | Meaning |
-|------|---------|
-| ✅ | All CI checks passed |
-| ❌ | CI checks failed |
-| ⏳ | CI checks running |
-| ⚪ | No CI checks |
-| 📝 | Draft PR |
-| ✓ | PR approved |
-| ✗ | Changes requested |
+**Status indicators:**
+
+| CI Status | Meaning |
+|-----------|---------|
+| `[ok]` | All CI checks passed |
+| `[fail]` | CI checks failed |
+| `[..]` | CI checks running |
+| `[--]` | No CI checks |
+| `[draft]` | Draft PR |
+
+| Review Status | Meaning |
+|---------------|---------|
+| `✓` | PR approved |
+| `✗` | Changes requested |
+
+After selecting a PR, choose an action:
+
+| Action | Description |
+|--------|-------------|
+| **Fix CI issues (auto)** | Claude fetches failed CI logs, fixes the issues, and pushes (only shown if CI failed) |
+| **Review this PR** | Claude performs a code review |
+| **Launch Claude** | Start Claude with PR context |
+| **Just create worktree** | Checkout the PR branch without Claude |
 
 ### Claude Code Integration
 
-After creating a worktree from an issue or PR, `wt` asks if you want to launch Claude Code:
+When launching Claude from an issue or PR, choose your preferred mode:
 
 ```
-Launch Claude Code for Issue #7 planning? [y/N]
+┌────────────────────────────────────────────────────────────┐
+│ Claude mode for Issue #7                                   │
+├────────────────────────────────────────────────────────────┤
+│ > >> Forced (full auto)                                    │
+│   ?> Ask (confirm actions)                                 │
+│   ## Plan (plan first)                                     │
+└────────────────────────────────────────────────────────────┘
 ```
 
-If you say yes, Claude opens with a pre-filled prompt to:
-- **For issues**: Read the issue and propose an implementation plan
-- **For PRs**: Review the code changes for bugs and best practices
+| Mode | Flag | Description |
+|------|------|-------------|
+| **Forced** | `--dangerously-skip-permissions` | Claude executes all actions automatically |
+| **Ask** | (default) | Claude asks for confirmation before impactful actions |
+| **Plan** | `--permission-mode=plan` | Claude analyzes and creates a plan first |
+
+### Auto-Resolve Issues
+
+Select "Auto-resolve" on an issue and Claude will autonomously:
+
+1. Read and analyze the issue
+2. Explore the codebase
+3. Implement the solution
+4. Run tests/build to verify
+5. Commit and push
+6. Create a Pull Request
+
+### Auto-Fix CI Failures
+
+When a PR has failed CI checks, select "Fix CI issues" and Claude will:
+
+1. Fetch the failed CI logs from GitHub
+2. Analyze the errors
+3. Fix the code
+4. Verify locally
+5. Push the fix
 
 ### Stash Management
 
 Access "Manage stashes" from the main menu to:
+
 - List all stashes with diff preview
 - Apply, pop, or drop stashes
 - Create new stashes (Ctrl+N)
 
-### Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Select / Create worktree |
-| `Ctrl+E` | Open worktree in editor (main menu) |
-| `Ctrl+O` | Open in browser (PR/Issue view) |
-| `Ctrl+N` | Create new stash (stash menu) |
-| `Esc` | Go back / Cancel |
-
 ### Editor Detection
 
 `Ctrl+E` auto-detects your editor in this order:
+
 1. Cursor
 2. VS Code
 3. `$EDITOR`
@@ -189,8 +290,10 @@ Worktrees are always created next to your main repository:
 |------------|----------|---------|
 | [fzf](https://github.com/junegunn/fzf) | Yes | Interactive selection |
 | [gh](https://cli.github.com/) | No | GitHub PR/Issue integration |
-| [jq](https://stedolan.github.io/jq/) | No | JSON parsing |
+| [jq](https://stedolan.github.io/jq/) | No | JSON parsing for PR/Issue display |
 | [claude](https://claude.ai/code) | No | Claude Code integration |
+
+Run `wt --setup` to check your dependencies status.
 
 **macOS:** All dependencies except Claude are automatically installed via Homebrew.
 
@@ -214,6 +317,7 @@ sudo rm /usr/local/bin/wt-core
 Then remove from `~/.zshrc` (or `~/.bashrc`):
 
 ```bash
+# wt - Git Worktree Manager
 eval "$(wt-core --shell-init)"
 ```
 
