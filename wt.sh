@@ -141,16 +141,20 @@ print_logo() {
   fi
 
   if $use_color; then
-    # Cyan color for the logo, bold
-    echo -e "\033[1;36m" >&2
+    # Orange color for the logo, bold
+    echo -e "\033[1;38;5;208m" >&2
   fi
 
   cat >&2 << 'EOF'
-██╗    ██╗████████╗
-██║    ██║╚══██╔══╝
-██║ █╗ ██║   ██║
-╚██╗████╔╝   ██║
- ╚═╝╚══╝    ╚═╝
+  (`\ .-') /` .-') _
+   `.( OO ),'(  OO) )
+,--./  .--.  /     '._
+|      |  |  |'--...__)
+|  |   |  |, '--.  .--'
+|  |.'.|  |_)   |  |
+|         |     |  |
+|   ,'.   |     |  |
+'--'   '--'     `--'
 EOF
 
   if $use_color; then
