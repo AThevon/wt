@@ -1,3 +1,4 @@
+#!/usr/bin/env zsh
 # wt - Git Worktree Manager
 # Add this to your .zshrc: eval "$(wt-core --shell-init)"
 # Or source this file directly
