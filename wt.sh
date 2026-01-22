@@ -392,17 +392,17 @@ SCRIPT_PATH="${BASH_SOURCE[0]}"
 
 # Colors (only if terminal supports it)
 if [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then
-  C_RESET='\033[0m'
-  C_BOLD='\033[1m'
-  C_DIM='\033[2m'
-  C_RED='\033[31m'
-  C_GREEN='\033[32m'
-  C_YELLOW='\033[33m'
-  C_BLUE='\033[34m'
-  C_MAGENTA='\033[35m'
-  C_CYAN='\033[36m'
-  C_WHITE='\033[37m'
-  C_ORANGE='\033[1;38;5;208m'
+  C_RESET=$'\033[0m'
+  C_BOLD=$'\033[1m'
+  C_DIM=$'\033[2m'
+  C_RED=$'\033[31m'
+  C_GREEN=$'\033[32m'
+  C_YELLOW=$'\033[33m'
+  C_BLUE=$'\033[34m'
+  C_MAGENTA=$'\033[35m'
+  C_CYAN=$'\033[36m'
+  C_WHITE=$'\033[37m'
+  C_ORANGE=$'\033[1;38;5;208m'
 else
   C_RESET='' C_BOLD='' C_DIM='' C_RED='' C_GREEN=''
   C_YELLOW='' C_BLUE='' C_MAGENTA='' C_CYAN='' C_WHITE='' C_ORANGE=''
@@ -1563,7 +1563,7 @@ main_menu() {
 
     # Construire les actions
     local actions=""
-    actions+=$'\n'"<<>><<>><<>><<>><<>><<>><<>><<>><<>><<>><<>><<>><<>>"
+    actions+=$'\n'"${C_DIM}-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=${C_RESET}"
     actions+=$'\n'"  Create a worktree"
     actions+=$'\n'"  Manage stashes"
     if [[ "$secondary_count" -ge 1 ]]; then
@@ -1580,6 +1580,7 @@ main_menu() {
       fzf --height=70% \
           --layout=reverse \
           --border \
+          --ansi \
           --header="$header" \
           --expect=ctrl-e,ctrl-n,ctrl-p,ctrl-g,ctrl-d \
           --preview="
