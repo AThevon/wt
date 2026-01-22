@@ -1796,3 +1796,12 @@ result=$(main_menu)
 if [[ -n "$result" ]]; then
   echo "$result"
 fi
+
+# This will fail shellcheck
+function broken_syntax() {
+  echo $unquoted_variable
+  if [ $x == "y" ]; then
+    echo "bad comparison"
+  fi
+}
+
