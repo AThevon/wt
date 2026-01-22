@@ -17,7 +17,7 @@
 A fast, interactive git worktree manager with fzf, GitHub integration, and Claude Code support.
 
 ![Version](https://img.shields.io/badge/version-1.3.1-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey)
 
 ## Why wt?
@@ -323,4 +323,4 @@ eval "$(wt-core --shell-init)"
 
 ## License
 
-MIT
+GPL-3.0
