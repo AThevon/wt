@@ -37,6 +37,7 @@ function wt() {
 
   if [[ -n "$target" ]]; then
     # Save current worktree before switching (for wt -)
+    # Only save if we're in a git worktree (don't save random dirs)
     local current_wt=$(git rev-parse --show-toplevel 2>/dev/null)
     if [[ -n "$current_wt" && "$current_wt" != "$target" ]]; then
       echo "$current_wt" > ~/.wt_prev
@@ -390,8 +391,8 @@ EOF
   exit 0
 fi
 
-# Vérifier qu'on est dans un repo git
-if ! git rev-parse --git-dir > /dev/null 2>&1; then
+# Vérifier qu'on est dans un repo git (sauf pour wt -)
+if [[ "$1" != "-" ]] && ! git rev-parse --git-dir > /dev/null 2>&1; then
   echo "Not in a git repository" >&2
   exit 1
 fi
