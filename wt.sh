@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.3.1"
+VERSION="1.4.0"
 
 # =============================================================================
 # Options de ligne de commande
@@ -23,6 +23,24 @@ if [[ "$1" == "--shell-init" ]]; then
 # wt - Git Worktree Manager
 unalias wt 2>/dev/null
 function wt() {
+  # Handle --dev: switch to local script from current worktree
+  if [[ "$1" == "--dev" ]]; then
+    local local_script="$(git rev-parse --show-toplevel 2>/dev/null)/wt.sh"
+    if [[ -f "$local_script" ]]; then
+      eval "$("$local_script" --dev)"
+      echo "Switched to dev mode: $local_script"
+    else
+      echo "No wt.sh found in current worktree" >&2
+    fi
+    return
+  fi
+  # Handle --release: switch back to wt-core from PATH
+  if [[ "$1" == "--release" ]]; then
+    eval "$(wt-core --shell-init)"
+    echo "Switched to release mode: wt-core"
+    return
+  fi
+
   local output=$(WT_WRAPPED=1 wt-core "$@")
   local target=""
   local claude_cmd=""
@@ -36,6 +54,12 @@ function wt() {
   done <<< "$output"
 
   if [[ -n "$target" ]]; then
+    # Save current worktree before switching (for wt -)
+    # Only save if we're in a git worktree (don't save random dirs)
+    local current_wt=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [[ -n "$current_wt" && "$current_wt" != "$target" ]]; then
+      echo "$current_wt" > ~/.wt_prev
+    fi
     cd "$target"
     echo "Navigated to: $target"
 
@@ -226,6 +250,26 @@ EOF
   exit 0
 fi
 
+# Switch to dev mode (use local script instead of wt-core)
+if [[ "$1" == "--dev" ]]; then
+  # Find wt.sh in current worktree
+  local_script="$(git rev-parse --show-toplevel 2>/dev/null)/wt.sh"
+  if [[ ! -f "$local_script" ]]; then
+    echo "No wt.sh found in current worktree" >&2
+    exit 1
+  fi
+  echo "# wt dev mode: $local_script"
+  "$local_script" --shell-init | sed "s|wt-core|$local_script|g"
+  exit 0
+fi
+
+# Switch back to release mode (use wt-core from PATH)
+if [[ "$1" == "--release" ]]; then
+  echo "# wt release mode: wt-core"
+  wt-core --shell-init
+  exit 0
+fi
+
 if [[ "$1" == "--setup" ]]; then
   # Colors for setup (defined early since msg() isn't available yet)
   if [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then
@@ -354,11 +398,15 @@ Usage: wt [options] [name]
 
 Arguments:
   name             Quick switch: fuzzy match on worktrees
+  -                Switch to previous worktree (like cd -)
+  .                Switch to main worktree
 
 Options:
   --help, -h       Show this help message
   --version, -v    Show version number
   --setup          Install wt (add to shell, create symlinks)
+  --dev            Switch to dev mode (use wt.sh from current worktree)
+  --release        Switch back to release mode (use wt-core from PATH)
 
 Keyboard shortcuts:
   Ctrl+E           Open in editor
@@ -369,7 +417,7 @@ Keyboard shortcuts:
 
 Features:
   - Create worktrees from branch, PR, or GitHub issue
-  - Multi-select delete with Tab
+  - Multi-select delete with Space
   - Dirty indicator (*) for uncommitted changes
   - Claude Code integration (forced/ask/plan modes)
 
@@ -377,14 +425,16 @@ Quick start:
   wt --setup       One-time installation
   wt               Interactive menu
   wt <name>        Quick switch to worktree
+  wt -             Switch to previous worktree (like cd -)
+  wt .             Switch to main worktree
 
 Dependencies: fzf (required), gh, jq, claude (optional)
 EOF
   exit 0
 fi
 
-# Vérifier qu'on est dans un repo git
-if ! git rev-parse --git-dir > /dev/null 2>&1; then
+# Vérifier qu'on est dans un repo git (sauf pour wt -)
+if [[ "$1" != "-" ]] && ! git rev-parse --git-dir > /dev/null 2>&1; then
   echo "Not in a git repository" >&2
   exit 1
 fi
@@ -1470,14 +1520,15 @@ action_delete_worktrees() {
     format_worktree_line "$wt"
   done > "$tmpfile"
 
-  # Multi-select with Tab, confirm with Enter
+  # Multi-select with Space, confirm with Enter
   local selected
   selected=$(fzf --height=60% \
         --layout=reverse \
         --border \
         --multi \
         --marker='x ' \
-        --header="Select worktree(s) to delete | Tab: select | Enter: confirm" \
+        --bind 'space:toggle+down' \
+        --header="Select worktree(s) to delete | Space: select | Enter: confirm" \
         --preview="
           path=\$(echo {} | awk '{print \$1}' | sed \"s|^~|\$HOME|\")
           if [[ -d \"\$path\" ]]; then
@@ -1628,7 +1679,7 @@ main_menu() {
               echo '> Delete worktree(s)'
               echo ''
               echo 'Select one or multiple worktrees to delete.'
-              echo 'Use Tab to toggle selection.'
+              echo 'Use Space to toggle selection.'
               echo ''
               echo 'Secondary worktrees ($secondary_count):'
               git worktree list --porcelain | grep '^worktree ' | cut -d' ' -f2- | tail -n +2 | while read wt; do
@@ -1805,6 +1856,35 @@ fi
 if [[ "$1" == "--issue-preview" ]]; then
   issue_preview "$2"
   exit 0
+fi
+
+# Switch to previous worktree (like cd -)
+if [[ "$1" == "-" ]]; then
+  if [[ -f ~/.wt_prev ]]; then
+    prev=$(cat ~/.wt_prev)
+    if [[ -d "$prev" ]]; then
+      echo "$prev"
+      exit 0
+    else
+      msg "Previous worktree no longer exists: $prev"
+      exit 1
+    fi
+  else
+    msg "No previous worktree (run 'wt --setup' to enable this feature)"
+    exit 1
+  fi
+fi
+
+# Switch to main worktree
+if [[ "$1" == "." ]]; then
+  main_wt=$(git worktree list --porcelain 2>/dev/null | head -1 | cut -d' ' -f2-)
+  if [[ -n "$main_wt" && -d "$main_wt" ]]; then
+    echo "$main_wt"
+    exit 0
+  else
+    msg "Could not find main worktree"
+    exit 1
+  fi
 fi
 
 # Quick switch: wt <name> fuzzy matches on worktrees
