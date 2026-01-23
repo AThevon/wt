@@ -36,6 +36,11 @@ function wt() {
   done <<< "$output"
 
   if [[ -n "$target" ]]; then
+    # Save current worktree before switching (for wt -)
+    local current_wt=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [[ -n "$current_wt" && "$current_wt" != "$target" ]]; then
+      echo "$current_wt" > ~/.wt_prev
+    fi
     cd "$target"
     echo "Navigated to: $target"
 
@@ -354,6 +359,7 @@ Usage: wt [options] [name]
 
 Arguments:
   name             Quick switch: fuzzy match on worktrees
+  -                Switch to previous worktree (like cd -)
 
 Options:
   --help, -h       Show this help message
@@ -377,6 +383,7 @@ Quick start:
   wt --setup       One-time installation
   wt               Interactive menu
   wt <name>        Quick switch to worktree
+  wt -             Switch to previous worktree (like cd -)
 
 Dependencies: fzf (required), gh, jq, claude (optional)
 EOF
@@ -1806,6 +1813,23 @@ fi
 if [[ "$1" == "--issue-preview" ]]; then
   issue_preview "$2"
   exit 0
+fi
+
+# Switch to previous worktree (like cd -)
+if [[ "$1" == "-" ]]; then
+  if [[ -f ~/.wt_prev ]]; then
+    prev=$(cat ~/.wt_prev)
+    if [[ -d "$prev" ]]; then
+      echo "$prev"
+      exit 0
+    else
+      msg "Previous worktree no longer exists: $prev"
+      exit 1
+    fi
+  else
+    msg "No previous worktree (run 'wt --setup' to enable this feature)"
+    exit 1
+  fi
 fi
 
 # Quick switch: wt <name> fuzzy matches on worktrees
