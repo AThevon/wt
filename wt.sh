@@ -232,6 +232,26 @@ EOF
   exit 0
 fi
 
+# Switch to dev mode (use local script instead of wt-core)
+if [[ "$1" == "--dev" ]]; then
+  # Find wt.sh in current worktree
+  local_script="$(git rev-parse --show-toplevel 2>/dev/null)/wt.sh"
+  if [[ ! -f "$local_script" ]]; then
+    echo "No wt.sh found in current worktree" >&2
+    exit 1
+  fi
+  echo "# wt dev mode: $local_script"
+  "$local_script" --shell-init | sed "s|wt-core|$local_script|g"
+  exit 0
+fi
+
+# Switch back to release mode (use wt-core from PATH)
+if [[ "$1" == "--release" ]]; then
+  echo "# wt release mode: wt-core"
+  wt-core --shell-init
+  exit 0
+fi
+
 if [[ "$1" == "--setup" ]]; then
   # Colors for setup (defined early since msg() isn't available yet)
   if [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then
@@ -367,6 +387,8 @@ Options:
   --help, -h       Show this help message
   --version, -v    Show version number
   --setup          Install wt (add to shell, create symlinks)
+  --dev            Switch to dev mode (use wt.sh from current worktree)
+  --release        Switch back to release mode (use wt-core from PATH)
 
 Keyboard shortcuts:
   Ctrl+E           Open in editor
