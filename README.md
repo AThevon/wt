@@ -16,7 +16,7 @@
 
 A fast, interactive git worktree manager with fzf, GitHub integration, and Claude Code support.
 
-![Version](https://img.shields.io/badge/version-1.3.1-blue)
+![Version](https://img.shields.io/badge/version-1.4.0-blue)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey)
 
@@ -100,7 +100,11 @@ wt review  # Jumps to "reviewing-fix-bug"
 |--------|-------------|
 | `wt` | Interactive menu |
 | `wt <name>` | Quick switch to matching worktree |
+| `wt .` | Switch to main worktree |
+| `wt -` | Switch to previous worktree |
 | `wt --setup` | One-time installation |
+| `wt --dev` | Switch to local development version |
+| `wt --release` | Switch to Homebrew release version |
 | `wt --help` | Show help |
 | `wt --version` | Show version |
 
@@ -111,7 +115,7 @@ wt review  # Jumps to "reviewing-fix-bug"
                     _ __..-;''`--/'/ /.',-`-.
                 ...
 
-  Git Worktree Manager v1.3.0
+  Git Worktree Manager v1.4.0
 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ myapp │ ^E: editor │ ^N: new │ ^P: PRs │ ^G: issues │ ^D: delete        │
