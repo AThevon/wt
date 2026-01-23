@@ -361,6 +361,7 @@ Usage: wt [options] [name]
 Arguments:
   name             Quick switch: fuzzy match on worktrees
   -                Switch to previous worktree (like cd -)
+  .                Switch to main worktree
 
 Options:
   --help, -h       Show this help message
@@ -385,6 +386,7 @@ Quick start:
   wt               Interactive menu
   wt <name>        Quick switch to worktree
   wt -             Switch to previous worktree (like cd -)
+  wt .             Switch to main worktree
 
 Dependencies: fzf (required), gh, jq, claude (optional)
 EOF
@@ -1829,6 +1831,18 @@ if [[ "$1" == "-" ]]; then
     fi
   else
     msg "No previous worktree (run 'wt --setup' to enable this feature)"
+    exit 1
+  fi
+fi
+
+# Switch to main worktree
+if [[ "$1" == "." ]]; then
+  main_wt=$(git worktree list --porcelain 2>/dev/null | head -1 | cut -d' ' -f2-)
+  if [[ -n "$main_wt" && -d "$main_wt" ]]; then
+    echo "$main_wt"
+    exit 0
+  else
+    msg "Could not find main worktree"
     exit 1
   fi
 fi
