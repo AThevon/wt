@@ -369,7 +369,7 @@ Keyboard shortcuts:
 
 Features:
   - Create worktrees from branch, PR, or GitHub issue
-  - Multi-select delete with Tab
+  - Multi-select delete with Space
   - Dirty indicator (*) for uncommitted changes
   - Claude Code integration (forced/ask/plan modes)
 
@@ -1470,14 +1470,15 @@ action_delete_worktrees() {
     format_worktree_line "$wt"
   done > "$tmpfile"
 
-  # Multi-select with Tab, confirm with Enter
+  # Multi-select with Space, confirm with Enter
   local selected
   selected=$(fzf --height=60% \
         --layout=reverse \
         --border \
         --multi \
         --marker='x ' \
-        --header="Select worktree(s) to delete | Tab: select | Enter: confirm" \
+        --bind 'space:toggle+down' \
+        --header="Select worktree(s) to delete | Space: select | Enter: confirm" \
         --preview="
           path=\$(echo {} | awk '{print \$1}' | sed \"s|^~|\$HOME|\")
           if [[ -d \"\$path\" ]]; then
@@ -1628,7 +1629,7 @@ main_menu() {
               echo '> Delete worktree(s)'
               echo ''
               echo 'Select one or multiple worktrees to delete.'
-              echo 'Use Tab to toggle selection.'
+              echo 'Use Space to toggle selection.'
               echo ''
               echo 'Secondary worktrees ($secondary_count):'
               git worktree list --porcelain | grep '^worktree ' | cut -d' ' -f2- | tail -n +2 | while read wt; do
