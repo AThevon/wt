@@ -23,6 +23,24 @@ if [[ "$1" == "--shell-init" ]]; then
 # wt - Git Worktree Manager
 unalias wt 2>/dev/null
 function wt() {
+  # Handle --dev: switch to local script from current worktree
+  if [[ "$1" == "--dev" ]]; then
+    local local_script="$(git rev-parse --show-toplevel 2>/dev/null)/wt.sh"
+    if [[ -f "$local_script" ]]; then
+      eval "$("$local_script" --dev)"
+      echo "Switched to dev mode: $local_script"
+    else
+      echo "No wt.sh found in current worktree" >&2
+    fi
+    return
+  fi
+  # Handle --release: switch back to wt-core from PATH
+  if [[ "$1" == "--release" ]]; then
+    eval "$(wt-core --shell-init)"
+    echo "Switched to release mode: wt-core"
+    return
+  fi
+
   local output=$(WT_WRAPPED=1 wt-core "$@")
   local target=""
   local claude_cmd=""
