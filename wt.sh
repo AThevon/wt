@@ -818,23 +818,27 @@ select_claude_mode() {
   local context_type="$1"  # pr-review, pr-work, issue-work
   local context_num="$2"
 
-  local header
+  local title
   case "$context_type" in
-    "pr-review") header="Claude mode for PR #$context_num review" ;;
-    "pr-work")   header="Claude mode for PR #$context_num" ;;
-    "issue-work") header="Claude mode for Issue #$context_num" ;;
-    *) header="Select Claude mode" ;;
+    "pr-review") title="PR #$context_num review" ;;
+    "pr-work")   title="PR #$context_num" ;;
+    "issue-work") title="Issue #$context_num" ;;
+    *) title="Claude mode" ;;
   esac
+
+  local header="${C_BOLD}$title${C_RESET}  ${C_DIM}^F forced · ^A ask · ^P plan${C_RESET}"
 
   local options=">> Forced (full auto)
 ?> Ask (confirm actions)
 ## Plan (plan first)"
 
-  local mode
-  mode=$(fzf --height=25% \
+  local result
+  result=$(fzf --height=25% \
         --layout=reverse \
         --border \
+        --ansi \
         --header="$header" \
+        --expect=ctrl-f,ctrl-a,ctrl-p \
         --preview="
           case {} in
             *Forced*)
@@ -864,6 +868,16 @@ select_claude_mode() {
           esac
         " \
         --preview-window=right:50% <<< "$options")
+
+  local key=$(echo "$result" | head -1)
+  local mode=$(echo "$result" | tail -n +2)
+
+  # Handle shortcuts
+  case "$key" in
+    ctrl-f) mode=">> Forced (full auto)" ;;
+    ctrl-a) mode="?> Ask (confirm actions)" ;;
+    ctrl-p) mode="## Plan (plan first)" ;;
+  esac
 
   case "$mode" in
     *"Forced"*)
@@ -913,12 +927,14 @@ create_from_branch() {
   git fetch --all --prune >/dev/null 2>&1
 
   local branch_name
+  local branch_header="${C_BOLD}Select branch${C_RESET}  ${C_DIM}Enter select · Esc cancel${C_RESET}"
   branch_name=$(git branch -a --format='%(refname:short)' | \
     grep -v '^HEAD' | \
     fzf --height=60% \
         --layout=reverse \
         --border \
-        --header="Select a branch (ESC to cancel)" \
+        --ansi \
+        --header="$branch_header" \
         --preview="git log --oneline --graph --color=always -10 {}" \
         --preview-window=right:50%)
 
@@ -959,12 +975,14 @@ create_new_branch() {
   git fetch --all --prune >/dev/null 2>&1
 
   local current_branch=$(git branch --show-current 2>/dev/null || echo "HEAD")
+  local base_header="${C_BOLD}Base branch${C_RESET}  ${C_DIM}Enter select · Esc use $current_branch${C_RESET}"
   local base_branch
   base_branch=$(printf "%s\n" "$current_branch (current)" $(git branch -a --format='%(refname:short)' | grep -v '^HEAD') | \
     fzf --height=60% \
         --layout=reverse \
         --border \
-        --header="Select base branch (ESC to use current: $current_branch)" \
+        --ansi \
+        --header="$base_header" \
         --preview="
           branch=\$(echo {} | sed 's/ (current)\$//')
           git log --oneline --graph --color=always -10 \"\$branch\" 2>/dev/null
@@ -1103,16 +1121,22 @@ Launch Claude
 Just create worktree"
 
   # Add "Fix CI issues" option if CI has failed
+  local shortcuts="^R review · ^L claude · ^W worktree"
   if [[ "$ci_failed" == "true" ]]; then
     options="Fix CI issues (auto)
 $options"
+    shortcuts="^F fix CI · $shortcuts"
   fi
 
-  local action
-  action=$(fzf --height=30% \
+  local header="${C_BOLD}PR #$pr_num${C_RESET}  ${C_DIM}$shortcuts${C_RESET}"
+
+  local result
+  result=$(fzf --height=30% \
         --layout=reverse \
         --border \
-        --header="PR #$pr_num - What do you want to do?" \
+        --ansi \
+        --header="$header" \
+        --expect=ctrl-f,ctrl-r,ctrl-l,ctrl-w \
         --preview="
           case {} in
             *Fix\ CI*)
@@ -1153,6 +1177,17 @@ $options"
         " \
         --preview-window=right:50% <<< "$options")
 
+  local key=$(echo "$result" | head -1)
+  local action=$(echo "$result" | tail -n +2)
+
+  # Handle shortcuts
+  case "$key" in
+    ctrl-f) action="Fix CI issues (auto)" ;;
+    ctrl-r) action="Review this PR" ;;
+    ctrl-l) action="Launch Claude" ;;
+    ctrl-w) action="Just create worktree" ;;
+  esac
+
   echo "$action"
 }
 
@@ -1176,13 +1211,14 @@ menu_review_pr() {
   fi
 
   # Boucle pour permettre Ctrl+O sans quitter
+  local header="${C_BOLD}Open PRs${C_RESET}  ${C_DIM}Enter select · ^O browser${C_RESET}"
   while true; do
     local result=$(echo -e "$prs" | \
       fzf --height=70% \
           --layout=reverse \
           --border \
           --ansi \
-          --header="Open PRs | Enter: select | Ctrl+O: open in browser" \
+          --header="$header" \
           --delimiter='\t' \
           --with-nth=1,2,3,4 \
           --preview="bash \"$SCRIPT_PATH\" --pr-preview {1}" \
@@ -1263,11 +1299,15 @@ select_issue_action() {
 Launch Claude
 Just create worktree"
 
-  local action
-  action=$(fzf --height=25% \
+  local header="${C_BOLD}Issue #$issue_num${C_RESET}  ${C_DIM}^A auto · ^L claude · ^W worktree${C_RESET}"
+
+  local result
+  result=$(fzf --height=25% \
         --layout=reverse \
         --border \
-        --header="Issue #$issue_num - What do you want to do?" \
+        --ansi \
+        --header="$header" \
+        --expect=ctrl-a,ctrl-l,ctrl-w \
         --preview="
           case {} in
             *Auto-resolve*)
@@ -1302,6 +1342,16 @@ Just create worktree"
         " \
         --preview-window=right:50% <<< "$options")
 
+  local key=$(echo "$result" | head -1)
+  local action=$(echo "$result" | tail -n +2)
+
+  # Handle shortcuts
+  case "$key" in
+    ctrl-a) action="Auto-resolve (full auto)" ;;
+    ctrl-l) action="Launch Claude" ;;
+    ctrl-w) action="Just create worktree" ;;
+  esac
+
   echo "$action"
 }
 
@@ -1325,12 +1375,14 @@ menu_from_issue() {
   fi
 
   # Boucle pour permettre Ctrl+O sans quitter
+  local header="${C_BOLD}Open Issues${C_RESET}  ${C_DIM}Enter select · ^O browser${C_RESET}"
   while true; do
     local result=$(echo "$issues" | \
       fzf --height=70% \
           --layout=reverse \
           --border \
-          --header="Open Issues | Enter: select | Ctrl+O: open in browser" \
+          --ansi \
+          --header="$header" \
           --delimiter='\t' \
           --with-nth=1,2,3,4 \
           --preview="bash \"$SCRIPT_PATH\" --issue-preview {1}" \
@@ -1393,7 +1445,9 @@ menu_from_issue() {
 
 menu_create_worktree() {
   while true; do
-    local choice=$(printf "%s\n" \
+    local header="${C_BOLD}Create a worktree${C_RESET}  ${C_DIM}^N new · ^B branch · ^C current · ^I issue · ^P pr${C_RESET}"
+
+    local result=$(printf "%s\n" \
       "New branch" \
       "From existing branch" \
       "From current (quick copy)" \
@@ -1403,7 +1457,21 @@ menu_create_worktree() {
       fzf --height=40% \
           --layout=reverse \
           --border \
-          --header="Create a worktree")
+          --ansi \
+          --header="$header" \
+          --expect=ctrl-n,ctrl-b,ctrl-c,ctrl-i,ctrl-p)
+
+    local key=$(echo "$result" | head -1)
+    local choice=$(echo "$result" | tail -n +2)
+
+    # Handle shortcuts
+    case "$key" in
+      ctrl-n) choice="New branch" ;;
+      ctrl-b) choice="From existing branch" ;;
+      ctrl-c) choice="From current (quick copy)" ;;
+      ctrl-i) choice="From an issue" ;;
+      ctrl-p) choice="Review a PR" ;;
+    esac
 
     case "$choice" in
       "New branch"*)
@@ -1550,16 +1618,18 @@ _stash_partial() {
     return 1
   fi
 
-  msg "Select files to stash (Space to select, Enter to confirm):"
+  local partial_header="${C_BOLD}Partial stash${C_RESET}  ${C_DIM}Space select · ^A all · Enter confirm${C_RESET}"
 
   local selected=$(echo "$all_files" | \
     fzf --height=60% \
         --layout=reverse \
         --border \
+        --ansi \
         --multi \
         --marker='+ ' \
         --bind 'space:toggle+down' \
-        --header="Space: select | Enter: stash selected | Esc: cancel" \
+        --bind 'ctrl-a:select-all' \
+        --header="$partial_header" \
         --preview="git diff --color=always -- {} 2>/dev/null || git diff --cached --color=always -- {} 2>/dev/null || cat {}" \
         --preview-window=right:50%)
 
@@ -1615,14 +1685,26 @@ menu_stash() {
 
     if [[ -z "$stashes" ]]; then
       # Proposer de créer un stash
-      local choice=$(printf "%s\n" \
+      local empty_header="${C_BOLD}No stashes${C_RESET}  ${C_DIM}^N create · ^E partial${C_RESET}"
+      local empty_result=$(printf "%s\n" \
         "Create stash (all changes)" \
         "Create partial stash (select files)" \
         "Back" | \
         fzf --height=30% \
             --layout=reverse \
             --border \
-            --header="No stashes found")
+            --ansi \
+            --header="$empty_header" \
+            --expect=ctrl-n,ctrl-e)
+
+      local empty_key=$(echo "$empty_result" | head -1)
+      local choice=$(echo "$empty_result" | tail -n +2)
+
+      # Handle shortcuts
+      case "$empty_key" in
+        ctrl-n) choice="Create stash (all changes)" ;;
+        ctrl-e) choice="Create partial stash (select files)" ;;
+      esac
 
       case "$choice" in
         "Create stash (all"*)
@@ -1649,10 +1731,10 @@ menu_stash() {
     # Générer la liste formatée
     local formatted_list=$(_format_stash_list "$stashes")
 
-    # Header simplifié
-    local header="ref         │ age  │ files │ branch       │ message
-────────────┴──────┴───────┴──────────────┴─────────────────────────────
-Enter: actions menu │ Space: multi-select │ ?: show all shortcuts"
+    # Header avec titre stylé
+    local header="${C_BOLD}Stashes${C_RESET}  ${C_DIM}Enter actions · Space select · ? help${C_RESET}
+ref         │ age  │ files │ branch       │ message
+────────────┴──────┴───────┴──────────────┴─────────────────────────────"
 
     # Aide complète pour le raccourci ?
     local help_text='
@@ -1986,11 +2068,14 @@ Rename stash
 Back"
 
     # Menu d'actions pour le stash sélectionné
-    local action=$(echo "$menu_options" | \
+    local stash_header="${C_BOLD}$stash_ref${C_RESET}  ${C_DIM}^A apply · ^P pop · ^D drop · ^W wt · ^B branch · ^S show${C_RESET}"
+    local action_result=$(echo "$menu_options" | \
       fzf --height=40% \
           --layout=reverse \
           --border \
-          --header="Action for $stash_ref" \
+          --ansi \
+          --header="$stash_header" \
+          --expect=ctrl-a,ctrl-p,ctrl-d,ctrl-w,ctrl-b,ctrl-s,ctrl-x,ctrl-r \
           --preview='
             action=$(echo {} | cut -d" " -f1)
             case "$action" in
@@ -2060,6 +2145,21 @@ Back"
             esac
           ' \
           --preview-window=right:50%)
+
+    local action_key=$(echo "$action_result" | head -1)
+    local action=$(echo "$action_result" | tail -n +2)
+
+    # Handle shortcuts
+    case "$action_key" in
+      ctrl-a) action="Apply (keep)" ;;
+      ctrl-p) action="Pop (apply + remove)" ;;
+      ctrl-d) action="Drop (delete)" ;;
+      ctrl-w) action="Create worktree from stash" ;;
+      ctrl-b) action="Create branch from stash" ;;
+      ctrl-s) action="Show full diff" ;;
+      ctrl-x) action="Export as patch" ;;
+      ctrl-r) action="Rename stash" ;;
+    esac
 
     case "$action" in
       "Apply (keep"*)
@@ -2198,16 +2298,19 @@ action_delete_worktrees() {
   done > "$tmpfile"
 
   # Multi-select with Space, confirm with Enter
+  local header="${C_BOLD}Delete worktree(s)${C_RESET}  ${C_DIM}Space select · ^A all · Enter confirm${C_RESET}"
   local selected
   selected=$(fzf --height=60% \
         --layout=reverse \
         --border \
+        --ansi \
         --multi \
         --marker='x ' \
         --bind 'space:toggle+down' \
-        --header="Select worktree(s) to delete | Space: select | Enter: confirm" \
+        --bind 'ctrl-a:select-all' \
+        --header="$header" \
         --preview="
-          path=\$(echo {} | /usr/bin/awk '{print \$1}' | /usr/bin/sed \"s|^~|\$HOME|\")
+          path=\$(echo {} | /usr/bin/awk '{print \$2}' | /usr/bin/sed \"s|^~|\$HOME|\")
           if [[ -d \"\$path\" ]]; then
             branch=\$(/usr/bin/git -C \"\$path\" branch --show-current 2>/dev/null || echo 'detached')
             default_branch=\$(/usr/bin/git -C \"$MAIN_REPO\" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | /usr/bin/sed 's@^refs/remotes/origin/@@')
@@ -2274,7 +2377,7 @@ action_delete_worktrees() {
   local dirty_list=""
   local dirty_count=0
   while IFS= read -r line; do
-    local path=$(echo "$line" | awk '{print $1}' | sed "s|^~|$HOME|")
+    local path=$(echo "$line" | awk '{print $2}' | sed "s|^~|$HOME|")
     if [[ -d "$path" ]] && [[ -n $(git -C "$path" status --porcelain 2>/dev/null) ]]; then
       dirty_list+="  ${path/#$HOME/~}"$'\n'
       ((dirty_count++))
@@ -2308,7 +2411,7 @@ action_delete_worktrees() {
 
   if [[ "$confirm" == "Yes"* ]]; then
     echo "$selected" | while IFS= read -r line; do
-      local to_remove=$(echo "$line" | awk '{print $1}' | sed "s|^~|$HOME|")
+      local to_remove=$(echo "$line" | awk '{print $2}' | sed "s|^~|$HOME|")
       # Try normal remove, then force, then manual cleanup
       if git -C "$MAIN_REPO" worktree remove "$to_remove" 2>/dev/null; then
         msg "Deleted: $to_remove"
@@ -2352,13 +2455,13 @@ main_menu() {
 
     # Construire les actions
     local actions=""
-    actions+=$'\n'"${C_DIM}-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=${C_RESET}"
-    actions+=$'\n'"  Create a worktree"
-    actions+=$'\n'"  Manage stashes"
+    actions+=$'\n'""  # Ligne vide comme séparateur
+    actions+=$'\n'"${C_DIM}＋${C_RESET} Create a worktree"
+    actions+=$'\n'"${C_DIM}⬡${C_RESET} Manage stashes"
     if [[ "$secondary_count" -ge 1 ]]; then
-      actions+=$'\n'"  Delete worktree(s)"
+      actions+=$'\n'"${C_DIM}✕${C_RESET} Delete worktree(s)"
     fi
-    actions+=$'\n'"  Quit"
+    actions+=$'\n'"${C_DIM}◀${C_RESET} Quit"
 
     local menu="${worktrees_formatted}${actions}"
 
@@ -2378,8 +2481,12 @@ main_menu() {
             if [[ \"\$line\" == \"<<>>\"* ]]; then
               exit 0
             fi
-            # Clean line (remove leading spaces for actions)
-            clean_line=\$(echo \"\$line\" | sed 's/^  //')
+            # Clean line (remove icon only for actions, not worktrees)
+            if [[ \"\$line\" == \"＋\"* || \"\$line\" == \"⬡\"* || \"\$line\" == \"✕\"* || \"\$line\" == \"◀\"* ]]; then
+              clean_line=\$(echo \"\$line\" | sed -E 's/^[^A-Za-z]*//')
+            else
+              clean_line=\"\$line\"
+            fi
             if [[ \"\$clean_line\" == \"Quit\"* ]]; then
               echo '> Exit wt'
             elif [[ \"\$clean_line\" == \"Create\"* ]]; then
@@ -2415,7 +2522,7 @@ main_menu() {
                 echo 'No stashes found'
               fi
             else
-              path=\$(echo \"\$line\" | /usr/bin/awk '{print \$1}' | /usr/bin/sed \"s|^~|\$HOME|\")
+              path=\$(echo \"\$line\" | /usr/bin/awk '{print \$2}' | /usr/bin/sed \"s|^~|\$HOME|\")
               if [[ -d \"\$path\" ]]; then
                 branch=\$(/usr/bin/git -C \"\$path\" branch --show-current 2>/dev/null || echo 'detached')
                 default_branch=\$(/usr/bin/git -C \"$MAIN_REPO\" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | /usr/bin/sed 's@^refs/remotes/origin/@@')
@@ -2496,8 +2603,8 @@ main_menu() {
     # Handle keyboard shortcuts
     case "$key" in
       ctrl-e)
-        if [[ -n "$selected" && "$selected" != "───"* && "$selected" != "  "* ]]; then
-          local path=$(echo "$selected" | awk '{print $1}' | sed "s|^~|$HOME|")
+        if [[ -n "$selected" && "$selected" != "───"* && "$selected" != "＋"* && "$selected" != "⬡"* && "$selected" != "✕"* && "$selected" != "◀"* ]]; then
+          local path=$(echo "$selected" | awk '{print $2}' | sed "s|^~|$HOME|")
           if [[ -d "$path" ]]; then
             local editor=$(get_editor)
             msg "Opening in $editor: $path"
@@ -2554,8 +2661,13 @@ main_menu() {
       continue
     fi
 
-    # Clean action lines (remove leading spaces)
-    local clean_selected=$(echo "$selected" | sed 's/^  //')
+    # Clean action lines (remove icon only for actions, not worktrees)
+    local clean_selected
+    if [[ "$selected" == "＋"* || "$selected" == "⬡"* || "$selected" == "✕"* || "$selected" == "◀"* ]]; then
+      clean_selected=$(echo "$selected" | sed -E 's/^[^A-Za-z]*//')
+    else
+      clean_selected="$selected"
+    fi
 
     case "$clean_selected" in
       "Create"*)
@@ -2582,7 +2694,7 @@ main_menu() {
         ;;
       *)
         # C'est un worktree existant - extraire et retourner le path
-        local path=$(echo "$selected" | awk '{print $1}' | sed "s|^~|$HOME|")
+        local path=$(echo "$selected" | awk '{print $2}' | sed "s|^~|$HOME|")
         if [[ -d "$path" ]]; then
           echo "$path"
           return 0
@@ -2641,7 +2753,7 @@ if [[ -n "$1" && "$1" != "--"* ]]; then
   worktrees_list=$(format_all_worktrees)
   match=$(echo "$worktrees_list" | fzf --filter="$1" | head -1)
   if [[ -n "$match" ]]; then
-    path=$(echo "$match" | awk '{print $1}' | sed "s|^~|$HOME|")
+    path=$(echo "$match" | awk '{print $2}' | sed "s|^~|$HOME|")
     if [[ -d "$path" ]]; then
       echo "$path"
       exit 0
