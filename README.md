@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.4.0-orange" alt="Version" />
+  <img src="https://img.shields.io/badge/version-1.5.0-orange" alt="Version" />
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License" />
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey" alt="Platform" />
 </p>
@@ -85,7 +85,7 @@ wt .        # Main worktree
  | |/ |/ / / /         ((__.-'((___..-'' \__.'
  |__/|__/ /_/
 
-  Git Worktree Manager v1.4.0
+  Git Worktree Manager v1.5.0
 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ myapp │ ^E: editor │ ^N: new │ ^P: PRs │ ^G: issues │ ^D: delete        │
@@ -142,6 +142,34 @@ Launch Claude from any issue or PR with three modes:
 **Fix CI failures:** Claude fetches logs, fixes the code, and pushes.
 
 **Review PRs:** Claude performs a comprehensive code review.
+
+### Stash Management
+
+The stash menu provides a complete workflow with rich information:
+
+- **Enhanced list** — age, file count, original branch
+- **Preview panel** — stash info, impacted files, conflict detection
+- **Partial stash** — select specific files with `Space`
+- **Multi-select drop** — delete multiple stashes at once
+- **Create worktree from stash** — `Ctrl+W`
+- **Create branch from stash** — `Ctrl+B`
+- **Resolve conflicts with Claude** — `Ctrl+R`
+- **Export to .patch** — `Ctrl+X`
+- **Rename stash** — `Ctrl+E`
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+A` | Apply stash |
+| `Ctrl+P` | Pop stash |
+| `Ctrl+D` | Drop stash(es) |
+| `Ctrl+W` | Create worktree from stash |
+| `Ctrl+B` | Create branch from stash |
+| `Ctrl+N` | New stash |
+| `Ctrl+E` | Rename stash |
+| `Ctrl+R` | Resolve conflicts (Claude) |
+| `Ctrl+S` | Partial stash (select files) |
+| `Ctrl+X` | Export to .patch |
+| `?` | Show all shortcuts |
 
 ### PR Status Indicators
 
