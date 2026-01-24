@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.4.0"
+VERSION="1.5.0"
 
 # =============================================================================
 # Options de ligne de commande
@@ -1513,7 +1513,7 @@ _stash_partial() {
     return 1
   fi
 
-  msg "Select files to stash (Tab to select, Enter to confirm):"
+  msg "Select files to stash (Space to select, Enter to confirm):"
 
   local selected=$(echo "$all_files" | \
     fzf --height=60% \
@@ -1521,8 +1521,8 @@ _stash_partial() {
         --border \
         --multi \
         --marker='+ ' \
-        --bind 'tab:toggle+down' \
-        --header="Tab: select | Enter: stash selected | Esc: cancel" \
+        --bind 'space:toggle+down' \
+        --header="Space: select | Enter: stash selected | Esc: cancel" \
         --preview="git diff --color=always -- {} 2>/dev/null || git diff --cached --color=always -- {} 2>/dev/null || cat {}" \
         --preview-window=right:50%)
 
@@ -1534,14 +1534,38 @@ _stash_partial() {
   local stash_msg
   read -r stash_msg </dev/tty
 
-  # Stash uniquement les fichiers sélectionnés
-  if [[ -n "$stash_msg" ]]; then
-    echo "$selected" | xargs git stash push -m "$stash_msg" --
-  else
-    echo "$selected" | xargs git stash push --
+  # Identifier les fichiers non trackés parmi la sélection
+  local untracked_files=$(git ls-files --others --exclude-standard 2>/dev/null)
+  local files_to_add=""
+
+  while IFS= read -r file; do
+    if echo "$untracked_files" | grep -qx "$file" 2>/dev/null; then
+      files_to_add="${files_to_add}${file}"$'\n'
+    fi
+  done <<< "$selected"
+
+  # Ajouter les fichiers non trackés à l'index temporairement
+  if [[ -n "$files_to_add" ]]; then
+    echo "$files_to_add" | xargs git add 2>/dev/null
   fi
 
-  msg "Partial stash created"
+  # Stash uniquement les fichiers sélectionnés
+  local stash_result
+  if [[ -n "$stash_msg" ]]; then
+    stash_result=$(echo "$selected" | xargs git stash push -m "$stash_msg" -- 2>&1)
+  else
+    stash_result=$(echo "$selected" | xargs git stash push -- 2>&1)
+  fi
+
+  if [[ $? -eq 0 ]]; then
+    msg "Partial stash created"
+  else
+    msg "Error creating stash: $stash_result"
+    # Rollback: unstage les fichiers qu'on avait ajoutés
+    if [[ -n "$files_to_add" ]]; then
+      echo "$files_to_add" | xargs git reset HEAD -- 2>/dev/null
+    fi
+  fi
 }
 
 # =============================================================================
@@ -1588,11 +1612,49 @@ menu_stash() {
     # Générer la liste formatée
     local formatted_list=$(_format_stash_list "$stashes")
 
-    # Header avec légende
+    # Header simplifié
     local header="ref         │ age  │ files │ branch       │ message
-────────────┼──────┼───────┼──────────────┼─────────────────────────────
-Enter: actions │ Ctrl+A: apply │ Ctrl+P: pop │ Ctrl+D: drop │ Ctrl+B: branch
-Ctrl+N: new stash │ Ctrl+E: partial stash │ Ctrl+X: export patch │ Space: multi-select"
+────────────┴──────┴───────┴──────────────┴─────────────────────────────
+Enter: actions menu │ Space: multi-select │ ?: show all shortcuts"
+
+    # Aide complète pour le raccourci ?
+    local help_text='
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  KEYBOARD SHORTCUTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ACTIONS
+  ───────
+  Enter     Open actions menu
+  Ctrl+A    Apply stash (keep it)
+  Ctrl+P    Pop stash (apply + remove)
+  Ctrl+D    Drop stash(es) (delete)
+
+  CREATE
+  ──────
+  Ctrl+N    New stash (all changes)
+  Ctrl+E    Partial stash (select files)
+
+  ADVANCED
+  ────────
+  Ctrl+W    Create worktree from stash
+  Ctrl+B    Create branch from stash
+  Ctrl+R    Apply + resolve conflicts (Claude)
+
+  VIEW / EXPORT
+  ─────────────
+  Ctrl+S    Show full diff
+  Ctrl+X    Export as .patch file
+
+  SELECTION
+  ─────────
+  Space     Toggle selection
+  Esc       Back / Cancel
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Press any key to return to stash info
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+'
 
     # Afficher les stashes avec actions
     local result=$(echo "$formatted_list" | \
@@ -1603,6 +1665,7 @@ Ctrl+N: new stash │ Ctrl+E: partial stash │ Ctrl+X: export patch │ Space: 
           --multi \
           --marker='> ' \
           --bind 'space:toggle+down' \
+          --bind "?:preview(echo '$help_text')" \
           --header="$header" \
           --preview='
             stash_ref=$(echo {} | cut -d" " -f1)
@@ -1770,7 +1833,76 @@ Ctrl+N: new stash │ Ctrl+E: partial stash │ Ctrl+X: export patch │ Space: 
         # Show diff complet
         if [[ -n "$selected" ]]; then
           local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
-          git stash show -p "$stash_ref" | less
+          git stash show -p "$stash_ref" | less </dev/tty
+        fi
+        continue
+        ;;
+      "ctrl-w")
+        # Créer un worktree depuis le stash
+        if [[ -n "$selected" ]]; then
+          local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
+          msg "Enter worktree/branch name:"
+          local wt_name
+          read -r wt_name </dev/tty
+          if [[ -n "$wt_name" ]]; then
+            local main_repo=$(git rev-parse --show-toplevel 2>/dev/null)
+            local parent_dir=$(dirname "$main_repo")
+            local repo_name=$(basename "$main_repo")
+            local wt_path="$parent_dir/${repo_name}-${wt_name}"
+
+            # Créer le worktree avec une nouvelle branche
+            if git worktree add -b "$wt_name" "$wt_path" 2>&1; then
+              # Appliquer le stash dans le nouveau worktree
+              if (cd "$wt_path" && git stash apply "$stash_ref" 2>&1); then
+                msg "Worktree created at $wt_path with stash applied"
+                # Proposer de drop le stash
+                local drop_confirm=$(printf "%s\n" "Yes, drop the stash" "No, keep it" | \
+                  fzf --height=20% --layout=reverse --border --header="Drop $stash_ref?")
+                if [[ "$drop_confirm" == "Yes"* ]]; then
+                  git stash drop "$stash_ref" >/dev/null 2>&1
+                  msg "Stash dropped"
+                fi
+                # Retourner le path pour navigation
+                echo "$wt_path"
+                return 0
+              else
+                msg "Worktree created but stash apply failed (conflicts?)"
+                echo "$wt_path"
+                return 0
+              fi
+            else
+              msg "Error creating worktree"
+            fi
+          fi
+        fi
+        continue
+        ;;
+      "ctrl-r")
+        # Apply + résoudre conflits avec Claude
+        if [[ -n "$selected" ]]; then
+          local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
+
+          # Appliquer le stash (même si conflits)
+          local apply_output=$(git stash apply "$stash_ref" 2>&1)
+          local apply_status=$?
+
+          # Vérifier s'il y a des conflits
+          local conflict_files=$(git diff --name-only --diff-filter=U 2>/dev/null)
+
+          if [[ -n "$conflict_files" ]]; then
+            msg "Conflicts detected, launching Claude to resolve..."
+            local files_list=$(echo "$conflict_files" | tr '\n' ' ')
+            # Lancer Claude pour résoudre les conflits
+            if command -v claude &>/dev/null; then
+              claude "Resolve the merge conflicts in these files: $files_list. The conflicts come from applying stash $stash_ref. Please fix all conflict markers (<<<<<<, ======, >>>>>>) and keep the best version of the code."
+            else
+              msg "Claude not found. Conflict files: $files_list"
+            fi
+          elif [[ $apply_status -eq 0 ]]; then
+            msg "Stash $stash_ref applied (no conflicts)"
+          else
+            msg "Error applying stash: $apply_output"
+          fi
         fi
         continue
         ;;
@@ -1784,16 +1916,40 @@ Ctrl+N: new stash │ Ctrl+E: partial stash │ Ctrl+X: export patch │ Space: 
     # Si Enter: menu d'actions classique
     local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
 
+    # Détecter les conflits potentiels
+    local stash_files=$(git stash show --name-only "$stash_ref" 2>/dev/null)
+    local modified_files=$(git diff --name-only HEAD 2>/dev/null)
+    local staged_files=$(git diff --cached --name-only 2>/dev/null)
+    local has_conflicts=""
+
+    while IFS= read -r sf; do
+      if echo "$modified_files" | grep -qx "$sf" 2>/dev/null || echo "$staged_files" | grep -qx "$sf" 2>/dev/null; then
+        has_conflicts="yes"
+        break
+      fi
+    done <<< "$stash_files"
+
+    # Construire le menu dynamiquement
+    local menu_options="Apply (keep stash)
+Pop (apply and remove)"
+
+    # Ajouter l'option Claude seulement si conflits potentiels
+    if [[ -n "$has_conflicts" ]]; then
+      menu_options="$menu_options
+Apply + resolve conflicts (Claude)"
+    fi
+
+    menu_options="$menu_options
+Create worktree from stash
+Drop (delete)
+Create branch from stash
+Export as patch
+Show full diff
+Rename stash
+Back"
+
     # Menu d'actions pour le stash sélectionné
-    local action=$(printf "%s\n" \
-      "Apply (keep stash)" \
-      "Pop (apply and remove)" \
-      "Drop (delete)" \
-      "Create branch from stash" \
-      "Export as patch" \
-      "Show full diff" \
-      "Rename stash" \
-      "Back" | \
+    local action=$(echo "$menu_options" | \
       fzf --height=40% \
           --layout=reverse \
           --border \
@@ -1802,10 +1958,19 @@ Ctrl+N: new stash │ Ctrl+E: partial stash │ Ctrl+X: export patch │ Space: 
             action=$(echo {} | cut -d" " -f1)
             case "$action" in
               "Apply")
-                echo "Apply the stash changes to your working directory."
-                echo "The stash will remain in the stash list."
-                echo ""
-                echo "Equivalent to: git stash apply"
+                if [[ "{}" == *"resolve"* ]] || [[ "{}" == *"Claude"* ]]; then
+                  echo "Apply the stash and resolve conflicts with Claude."
+                  echo ""
+                  echo "If conflicts occur, Claude will automatically"
+                  echo "analyze and fix the conflict markers."
+                  echo ""
+                  echo "Requires: claude CLI installed"
+                else
+                  echo "Apply the stash changes to your working directory."
+                  echo "The stash will remain in the stash list."
+                  echo ""
+                  echo "Equivalent to: git stash apply"
+                fi
                 ;;
               "Pop")
                 echo "Apply the stash changes and remove it from the list."
@@ -1820,10 +1985,21 @@ Ctrl+N: new stash │ Ctrl+E: partial stash │ Ctrl+X: export patch │ Space: 
                 echo "Equivalent to: git stash drop"
                 ;;
               "Create")
-                echo "Create a new branch from this stash."
-                echo "The stash will be applied and removed."
-                echo ""
-                echo "Equivalent to: git stash branch <name>"
+                if [[ "{}" == *"worktree"* ]]; then
+                  echo "Create a new worktree with this stash applied."
+                  echo ""
+                  echo "- Creates a new branch"
+                  echo "- Creates a worktree in parent directory"
+                  echo "- Applies the stash in the new worktree"
+                  echo "- Optionally drops the stash after"
+                  echo ""
+                  echo "Perfect for isolating WIP work!"
+                else
+                  echo "Create a new branch from this stash."
+                  echo "The stash will be applied and removed."
+                  echo ""
+                  echo "Equivalent to: git stash branch <name>"
+                fi
                 ;;
               "Export")
                 echo "Export the stash as a .patch file."
@@ -1849,11 +2025,30 @@ Ctrl+N: new stash │ Ctrl+E: partial stash │ Ctrl+X: export patch │ Space: 
           --preview-window=right:50%)
 
     case "$action" in
-      "Apply"*)
+      "Apply (keep"*)
         if git stash apply "$stash_ref" 2>&1; then
           msg "Stash applied"
         else
           msg "Error applying stash (conflicts?)"
+        fi
+        ;;
+      "Apply + resolve"*)
+        # Apply + résoudre conflits avec Claude
+        local apply_output=$(git stash apply "$stash_ref" 2>&1)
+        local apply_status=$?
+        local conflict_files=$(git diff --name-only --diff-filter=U 2>/dev/null)
+        if [[ -n "$conflict_files" ]]; then
+          msg "Conflicts detected, launching Claude to resolve..."
+          local files_list=$(echo "$conflict_files" | tr '\n' ' ')
+          if command -v claude &>/dev/null; then
+            claude "Resolve the merge conflicts in these files: $files_list. The conflicts come from applying stash $stash_ref. Please fix all conflict markers (<<<<<<, ======, >>>>>>) and keep the best version of the code."
+          else
+            msg "Claude not found. Conflict files: $files_list"
+          fi
+        elif [[ $apply_status -eq 0 ]]; then
+          msg "Stash $stash_ref applied (no conflicts)"
+        else
+          msg "Error applying stash: $apply_output"
         fi
         ;;
       "Pop"*)
@@ -1861,6 +2056,36 @@ Ctrl+N: new stash │ Ctrl+E: partial stash │ Ctrl+X: export patch │ Space: 
           msg "Stash popped"
         else
           msg "Error popping stash (conflicts?)"
+        fi
+        ;;
+      "Create worktree"*)
+        msg "Enter worktree/branch name:"
+        local wt_name
+        read -r wt_name </dev/tty
+        if [[ -n "$wt_name" ]]; then
+          local main_repo=$(git rev-parse --show-toplevel 2>/dev/null)
+          local parent_dir=$(dirname "$main_repo")
+          local repo_name=$(basename "$main_repo")
+          local wt_path="$parent_dir/${repo_name}-${wt_name}"
+          if git worktree add -b "$wt_name" "$wt_path" 2>&1; then
+            if (cd "$wt_path" && git stash apply "$stash_ref" 2>&1); then
+              msg "Worktree created at $wt_path with stash applied"
+              local drop_confirm=$(printf "%s\n" "Yes, drop the stash" "No, keep it" | \
+                fzf --height=20% --layout=reverse --border --header="Drop $stash_ref?")
+              if [[ "$drop_confirm" == "Yes"* ]]; then
+                git stash drop "$stash_ref" >/dev/null 2>&1
+                msg "Stash dropped"
+              fi
+              echo "$wt_path"
+              return 0
+            else
+              msg "Worktree created but stash apply failed (conflicts?)"
+              echo "$wt_path"
+              return 0
+            fi
+          else
+            msg "Error creating worktree"
+          fi
         fi
         ;;
       "Drop"*)
@@ -1891,7 +2116,7 @@ Ctrl+N: new stash │ Ctrl+E: partial stash │ Ctrl+X: export patch │ Space: 
         msg "Exported to $patch_file"
         ;;
       "Show"*)
-        git stash show -p "$stash_ref" | less
+        git stash show -p "$stash_ref" | less </dev/tty
         ;;
       "Rename"*)
         msg "Enter new stash message:"
