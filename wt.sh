@@ -702,7 +702,7 @@ is_branch_merged() {
   fi
 
   # Check if branch is merged into default branch
-  git -C "$MAIN_REPO" branch --merged "$default_branch" 2>/dev/null | grep -qE "^\s*$branch$"
+  git -C "$MAIN_REPO" branch --merged "$default_branch" 2>/dev/null | grep -qE "^[[:space:]*+]*$branch$"
 }
 
 format_worktree_line() {
@@ -2319,7 +2319,7 @@ action_delete_worktrees() {
             # Header with merge status
             printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
             if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]]; then
-              if /usr/bin/git -C \"$MAIN_REPO\" branch --merged \"\$default_branch\" 2>/dev/null | /usr/bin/grep -qE \"^\\s*\$branch\$\"; then
+              if /usr/bin/git -C \"$MAIN_REPO\" branch --merged \"\$default_branch\" 2>/dev/null | /usr/bin/grep -qE \"^[[:space:]*+]*\$branch\$\"; then
                 printf '  Branch: %s  \033[32m✓ merged\033[0m\n' \"\$branch\"
               else
                 printf '  Branch: %s  \033[33m○ not merged\033[0m\n' \"\$branch\"
@@ -2531,7 +2531,7 @@ main_menu() {
                 # Header with merge status
                 printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
                 if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]]; then
-                  if /usr/bin/git -C \"$MAIN_REPO\" branch --merged \"\$default_branch\" 2>/dev/null | /usr/bin/grep -qE \"^\\s*\$branch\$\"; then
+                  if /usr/bin/git -C \"$MAIN_REPO\" branch --merged \"\$default_branch\" 2>/dev/null | /usr/bin/grep -qE \"^[[:space:]*+]*\$branch\$\"; then
                     printf '  Branch: %s  \033[32m✓ merged\033[0m\n' \"\$branch\"
                   else
                     printf '  Branch: %s  \033[33m○ not merged\033[0m\n' \"\$branch\"
