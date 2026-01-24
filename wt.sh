@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.5.0"
+VERSION="1.6.0"
 
 # =============================================================================
 # Options de ligne de commande
@@ -682,18 +682,55 @@ get_secondary_worktrees() {
   get_worktrees | tail -n +2
 }
 
+# Get the default branch (main or master)
+get_default_branch() {
+  local default_branch=$(git -C "$MAIN_REPO" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+  if [[ -z "$default_branch" ]]; then
+    default_branch="main"
+  fi
+  echo "$default_branch"
+}
+
+# Check if a branch is merged into the default branch (fast, local check)
+is_branch_merged() {
+  local branch="$1"
+  local default_branch=$(get_default_branch)
+
+  # Skip check for the default branch itself
+  if [[ "$branch" == "$default_branch" ]]; then
+    return 1
+  fi
+
+  # Check if branch is merged into default branch
+  git -C "$MAIN_REPO" branch --merged "$default_branch" 2>/dev/null | grep -qE "^\s*$branch$"
+}
+
 format_worktree_line() {
   local wt_path="$1"
   local branch=$(git -C "$wt_path" branch --show-current 2>/dev/null || echo "detached")
   local short_path="${wt_path/#$HOME/~}"
+  local default_branch=$(get_default_branch)
 
   # Dirty check
   local dirty=""
   if [[ -n $(git -C "$wt_path" status --porcelain 2>/dev/null) ]]; then
-    dirty="*"
+    dirty=" *"
   fi
 
-  printf "%-50s %s[%s]\n" "$short_path" "$dirty" "$branch"
+  # Status indicator at the beginning
+  local status_icon
+  if [[ "$branch" == "$default_branch" ]]; then
+    # Main branch - neutral
+    status_icon="${C_DIM}●${C_RESET}"
+  elif is_branch_merged "$branch"; then
+    # Merged - green checkmark
+    status_icon="${C_GREEN}✓${C_RESET}"
+  else
+    # Not merged - orange circle (in progress)
+    status_icon="${C_ORANGE}○${C_RESET}"
+  fi
+
+  printf "%s %-48s %s[%s]\n" "$status_icon" "$short_path" "$dirty" "$branch"
 }
 
 format_all_worktrees() {
@@ -781,23 +818,27 @@ select_claude_mode() {
   local context_type="$1"  # pr-review, pr-work, issue-work
   local context_num="$2"
 
-  local header
+  local title
   case "$context_type" in
-    "pr-review") header="Claude mode for PR #$context_num review" ;;
-    "pr-work")   header="Claude mode for PR #$context_num" ;;
-    "issue-work") header="Claude mode for Issue #$context_num" ;;
-    *) header="Select Claude mode" ;;
+    "pr-review") title="PR #$context_num review" ;;
+    "pr-work")   title="PR #$context_num" ;;
+    "issue-work") title="Issue #$context_num" ;;
+    *) title="Claude mode" ;;
   esac
+
+  local header="${C_BOLD}$title${C_RESET}  ${C_DIM}^F forced · ^A ask · ^P plan${C_RESET}"
 
   local options=">> Forced (full auto)
 ?> Ask (confirm actions)
 ## Plan (plan first)"
 
-  local mode
-  mode=$(fzf --height=25% \
+  local result
+  result=$(fzf --height=25% \
         --layout=reverse \
         --border \
+        --ansi \
         --header="$header" \
+        --expect=ctrl-f,ctrl-a,ctrl-p \
         --preview="
           case {} in
             *Forced*)
@@ -827,6 +868,16 @@ select_claude_mode() {
           esac
         " \
         --preview-window=right:50% <<< "$options")
+
+  local key=$(echo "$result" | head -1)
+  local mode=$(echo "$result" | tail -n +2)
+
+  # Handle shortcuts
+  case "$key" in
+    ctrl-f) mode=">> Forced (full auto)" ;;
+    ctrl-a) mode="?> Ask (confirm actions)" ;;
+    ctrl-p) mode="## Plan (plan first)" ;;
+  esac
 
   case "$mode" in
     *"Forced"*)
@@ -876,12 +927,14 @@ create_from_branch() {
   git fetch --all --prune >/dev/null 2>&1
 
   local branch_name
+  local branch_header="${C_BOLD}Select branch${C_RESET}  ${C_DIM}Enter select · Esc cancel${C_RESET}"
   branch_name=$(git branch -a --format='%(refname:short)' | \
     grep -v '^HEAD' | \
     fzf --height=60% \
         --layout=reverse \
         --border \
-        --header="Select a branch (ESC to cancel)" \
+        --ansi \
+        --header="$branch_header" \
         --preview="git log --oneline --graph --color=always -10 {}" \
         --preview-window=right:50%)
 
@@ -922,12 +975,14 @@ create_new_branch() {
   git fetch --all --prune >/dev/null 2>&1
 
   local current_branch=$(git branch --show-current 2>/dev/null || echo "HEAD")
+  local base_header="${C_BOLD}Base branch${C_RESET}  ${C_DIM}Enter select · Esc use $current_branch${C_RESET}"
   local base_branch
   base_branch=$(printf "%s\n" "$current_branch (current)" $(git branch -a --format='%(refname:short)' | grep -v '^HEAD') | \
     fzf --height=60% \
         --layout=reverse \
         --border \
-        --header="Select base branch (ESC to use current: $current_branch)" \
+        --ansi \
+        --header="$base_header" \
         --preview="
           branch=\$(echo {} | sed 's/ (current)\$//')
           git log --oneline --graph --color=always -10 \"\$branch\" 2>/dev/null
@@ -1066,16 +1121,22 @@ Launch Claude
 Just create worktree"
 
   # Add "Fix CI issues" option if CI has failed
+  local shortcuts="^R review · ^L claude · ^W worktree"
   if [[ "$ci_failed" == "true" ]]; then
     options="Fix CI issues (auto)
 $options"
+    shortcuts="^F fix CI · $shortcuts"
   fi
 
-  local action
-  action=$(fzf --height=30% \
+  local header="${C_BOLD}PR #$pr_num${C_RESET}  ${C_DIM}$shortcuts${C_RESET}"
+
+  local result
+  result=$(fzf --height=30% \
         --layout=reverse \
         --border \
-        --header="PR #$pr_num - What do you want to do?" \
+        --ansi \
+        --header="$header" \
+        --expect=ctrl-f,ctrl-r,ctrl-l,ctrl-w \
         --preview="
           case {} in
             *Fix\ CI*)
@@ -1116,6 +1177,17 @@ $options"
         " \
         --preview-window=right:50% <<< "$options")
 
+  local key=$(echo "$result" | head -1)
+  local action=$(echo "$result" | tail -n +2)
+
+  # Handle shortcuts
+  case "$key" in
+    ctrl-f) action="Fix CI issues (auto)" ;;
+    ctrl-r) action="Review this PR" ;;
+    ctrl-l) action="Launch Claude" ;;
+    ctrl-w) action="Just create worktree" ;;
+  esac
+
   echo "$action"
 }
 
@@ -1139,13 +1211,14 @@ menu_review_pr() {
   fi
 
   # Boucle pour permettre Ctrl+O sans quitter
+  local header="${C_BOLD}Open PRs${C_RESET}  ${C_DIM}Enter select · ^O browser${C_RESET}"
   while true; do
     local result=$(echo -e "$prs" | \
       fzf --height=70% \
           --layout=reverse \
           --border \
           --ansi \
-          --header="Open PRs | Enter: select | Ctrl+O: open in browser" \
+          --header="$header" \
           --delimiter='\t' \
           --with-nth=1,2,3,4 \
           --preview="bash \"$SCRIPT_PATH\" --pr-preview {1}" \
@@ -1226,11 +1299,15 @@ select_issue_action() {
 Launch Claude
 Just create worktree"
 
-  local action
-  action=$(fzf --height=25% \
+  local header="${C_BOLD}Issue #$issue_num${C_RESET}  ${C_DIM}^A auto · ^L claude · ^W worktree${C_RESET}"
+
+  local result
+  result=$(fzf --height=25% \
         --layout=reverse \
         --border \
-        --header="Issue #$issue_num - What do you want to do?" \
+        --ansi \
+        --header="$header" \
+        --expect=ctrl-a,ctrl-l,ctrl-w \
         --preview="
           case {} in
             *Auto-resolve*)
@@ -1265,6 +1342,16 @@ Just create worktree"
         " \
         --preview-window=right:50% <<< "$options")
 
+  local key=$(echo "$result" | head -1)
+  local action=$(echo "$result" | tail -n +2)
+
+  # Handle shortcuts
+  case "$key" in
+    ctrl-a) action="Auto-resolve (full auto)" ;;
+    ctrl-l) action="Launch Claude" ;;
+    ctrl-w) action="Just create worktree" ;;
+  esac
+
   echo "$action"
 }
 
@@ -1288,12 +1375,14 @@ menu_from_issue() {
   fi
 
   # Boucle pour permettre Ctrl+O sans quitter
+  local header="${C_BOLD}Open Issues${C_RESET}  ${C_DIM}Enter select · ^O browser${C_RESET}"
   while true; do
     local result=$(echo "$issues" | \
       fzf --height=70% \
           --layout=reverse \
           --border \
-          --header="Open Issues | Enter: select | Ctrl+O: open in browser" \
+          --ansi \
+          --header="$header" \
           --delimiter='\t' \
           --with-nth=1,2,3,4 \
           --preview="bash \"$SCRIPT_PATH\" --issue-preview {1}" \
@@ -1356,7 +1445,9 @@ menu_from_issue() {
 
 menu_create_worktree() {
   while true; do
-    local choice=$(printf "%s\n" \
+    local header="${C_BOLD}Create a worktree${C_RESET}  ${C_DIM}^N new · ^B branch · ^C current · ^I issue · ^P pr${C_RESET}"
+
+    local result=$(printf "%s\n" \
       "New branch" \
       "From existing branch" \
       "From current (quick copy)" \
@@ -1366,7 +1457,21 @@ menu_create_worktree() {
       fzf --height=40% \
           --layout=reverse \
           --border \
-          --header="Create a worktree")
+          --ansi \
+          --header="$header" \
+          --expect=ctrl-n,ctrl-b,ctrl-c,ctrl-i,ctrl-p)
+
+    local key=$(echo "$result" | head -1)
+    local choice=$(echo "$result" | tail -n +2)
+
+    # Handle shortcuts
+    case "$key" in
+      ctrl-n) choice="New branch" ;;
+      ctrl-b) choice="From existing branch" ;;
+      ctrl-c) choice="From current (quick copy)" ;;
+      ctrl-i) choice="From an issue" ;;
+      ctrl-p) choice="Review a PR" ;;
+    esac
 
     case "$choice" in
       "New branch"*)
@@ -1513,16 +1618,18 @@ _stash_partial() {
     return 1
   fi
 
-  msg "Select files to stash (Space to select, Enter to confirm):"
+  local partial_header="${C_BOLD}Partial stash${C_RESET}  ${C_DIM}Space select · ^A all · Enter confirm${C_RESET}"
 
   local selected=$(echo "$all_files" | \
     fzf --height=60% \
         --layout=reverse \
         --border \
+        --ansi \
         --multi \
         --marker='+ ' \
         --bind 'space:toggle+down' \
-        --header="Space: select | Enter: stash selected | Esc: cancel" \
+        --bind 'ctrl-a:select-all' \
+        --header="$partial_header" \
         --preview="git diff --color=always -- {} 2>/dev/null || git diff --cached --color=always -- {} 2>/dev/null || cat {}" \
         --preview-window=right:50%)
 
@@ -1578,14 +1685,26 @@ menu_stash() {
 
     if [[ -z "$stashes" ]]; then
       # Proposer de créer un stash
-      local choice=$(printf "%s\n" \
+      local empty_header="${C_BOLD}No stashes${C_RESET}  ${C_DIM}^N create · ^E partial${C_RESET}"
+      local empty_result=$(printf "%s\n" \
         "Create stash (all changes)" \
         "Create partial stash (select files)" \
         "Back" | \
         fzf --height=30% \
             --layout=reverse \
             --border \
-            --header="No stashes found")
+            --ansi \
+            --header="$empty_header" \
+            --expect=ctrl-n,ctrl-e)
+
+      local empty_key=$(echo "$empty_result" | head -1)
+      local choice=$(echo "$empty_result" | tail -n +2)
+
+      # Handle shortcuts
+      case "$empty_key" in
+        ctrl-n) choice="Create stash (all changes)" ;;
+        ctrl-e) choice="Create partial stash (select files)" ;;
+      esac
 
       case "$choice" in
         "Create stash (all"*)
@@ -1612,10 +1731,10 @@ menu_stash() {
     # Générer la liste formatée
     local formatted_list=$(_format_stash_list "$stashes")
 
-    # Header simplifié
-    local header="ref         │ age  │ files │ branch       │ message
-────────────┴──────┴───────┴──────────────┴─────────────────────────────
-Enter: actions menu │ Space: multi-select │ ?: show all shortcuts"
+    # Header avec titre stylé
+    local header="${C_BOLD}Stashes${C_RESET}  ${C_DIM}Enter actions · Space select · ? help${C_RESET}
+ref         │ age  │ files │ branch       │ message
+────────────┴──────┴───────┴──────────────┴─────────────────────────────"
 
     # Aide complète pour le raccourci ?
     local help_text='
@@ -1949,11 +2068,14 @@ Rename stash
 Back"
 
     # Menu d'actions pour le stash sélectionné
-    local action=$(echo "$menu_options" | \
+    local stash_header="${C_BOLD}$stash_ref${C_RESET}  ${C_DIM}^A apply · ^P pop · ^D drop · ^W wt · ^B branch · ^S show${C_RESET}"
+    local action_result=$(echo "$menu_options" | \
       fzf --height=40% \
           --layout=reverse \
           --border \
-          --header="Action for $stash_ref" \
+          --ansi \
+          --header="$stash_header" \
+          --expect=ctrl-a,ctrl-p,ctrl-d,ctrl-w,ctrl-b,ctrl-s,ctrl-x,ctrl-r \
           --preview='
             action=$(echo {} | cut -d" " -f1)
             case "$action" in
@@ -2023,6 +2145,21 @@ Back"
             esac
           ' \
           --preview-window=right:50%)
+
+    local action_key=$(echo "$action_result" | head -1)
+    local action=$(echo "$action_result" | tail -n +2)
+
+    # Handle shortcuts
+    case "$action_key" in
+      ctrl-a) action="Apply (keep)" ;;
+      ctrl-p) action="Pop (apply + remove)" ;;
+      ctrl-d) action="Drop (delete)" ;;
+      ctrl-w) action="Create worktree from stash" ;;
+      ctrl-b) action="Create branch from stash" ;;
+      ctrl-s) action="Show full diff" ;;
+      ctrl-x) action="Export as patch" ;;
+      ctrl-r) action="Rename stash" ;;
+    esac
 
     case "$action" in
       "Apply (keep"*)
@@ -2161,24 +2298,68 @@ action_delete_worktrees() {
   done > "$tmpfile"
 
   # Multi-select with Space, confirm with Enter
+  local header="${C_BOLD}Delete worktree(s)${C_RESET}  ${C_DIM}Space select · ^A all · Enter confirm${C_RESET}"
   local selected
   selected=$(fzf --height=60% \
         --layout=reverse \
         --border \
+        --ansi \
         --multi \
         --marker='x ' \
         --bind 'space:toggle+down' \
-        --header="Select worktree(s) to delete | Space: select | Enter: confirm" \
+        --bind 'ctrl-a:select-all' \
+        --header="$header" \
         --preview="
-          path=\$(echo {} | awk '{print \$1}' | sed \"s|^~|\$HOME|\")
+          path=\$(echo {} | /usr/bin/awk '{print \$2}' | /usr/bin/sed \"s|^~|\$HOME|\")
           if [[ -d \"\$path\" ]]; then
-            echo \"Path: \$path\"
+            branch=\$(/usr/bin/git -C \"\$path\" branch --show-current 2>/dev/null || echo 'detached')
+            default_branch=\$(/usr/bin/git -C \"$MAIN_REPO\" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | /usr/bin/sed 's@^refs/remotes/origin/@@')
+            [[ -z \"\$default_branch\" ]] && default_branch=\"main\"
+
+            # Header with merge status
+            printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+            if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]]; then
+              if /usr/bin/git -C \"$MAIN_REPO\" branch --merged \"\$default_branch\" 2>/dev/null | /usr/bin/grep -qE \"^\\s*\$branch\$\"; then
+                printf '  Branch: %s  \033[32m✓ merged\033[0m\n' \"\$branch\"
+              else
+                printf '  Branch: %s  \033[33m○ not merged\033[0m\n' \"\$branch\"
+              fi
+            else
+              printf '  Branch: %s\n' \"\$branch\"
+            fi
+            printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+
+            # Uncommitted changes
+            changes=\$(/usr/bin/git -C \"\$path\" status --porcelain 2>/dev/null)
+            if [[ -n \"\$changes\" ]]; then
+              printf '  \033[33mUncommitted changes:\033[0m\n'
+              echo \"\$changes\" | /usr/bin/head -8
+              echo ''
+            fi
+
+            # Recent commits
+            printf '  Recent commits:\n'
+            /usr/bin/git -C \"\$path\" log --oneline -5 2>/dev/null
             echo ''
-            echo 'Status:'
-            git -C \"\$path\" status --short 2>/dev/null | /usr/bin/head -10
-            echo ''
-            echo 'Recent commits:'
-            git -C \"\$path\" log --oneline -5 2>/dev/null
+
+            # PR status (at the end)
+            if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]] && command -v gh &>/dev/null; then
+              pr_info=\$(gh pr view \"\$branch\" --json state,number,title 2>/dev/null)
+              if [[ -n \"\$pr_info\" ]]; then
+                pr_state=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.state')
+                pr_number=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.number')
+                pr_title=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.title[0:40]')
+                printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+                if [[ \"\$pr_state\" == \"MERGED\" ]]; then
+                  printf '  \033[32m✓ PR #%s MERGED\033[0m\n' \"\$pr_number\"
+                elif [[ \"\$pr_state\" == \"CLOSED\" ]]; then
+                  printf '  \033[31m✗ PR #%s CLOSED\033[0m\n' \"\$pr_number\"
+                else
+                  printf '  \033[34m○ PR #%s OPEN\033[0m\n' \"\$pr_number\"
+                fi
+                printf '  %s\n' \"\$pr_title\"
+              fi
+            fi
           fi
         " \
         --preview-window=right:50% < "$tmpfile")
@@ -2196,7 +2377,7 @@ action_delete_worktrees() {
   local dirty_list=""
   local dirty_count=0
   while IFS= read -r line; do
-    local path=$(echo "$line" | awk '{print $1}' | sed "s|^~|$HOME|")
+    local path=$(echo "$line" | awk '{print $2}' | sed "s|^~|$HOME|")
     if [[ -d "$path" ]] && [[ -n $(git -C "$path" status --porcelain 2>/dev/null) ]]; then
       dirty_list+="  ${path/#$HOME/~}"$'\n'
       ((dirty_count++))
@@ -2230,7 +2411,7 @@ action_delete_worktrees() {
 
   if [[ "$confirm" == "Yes"* ]]; then
     echo "$selected" | while IFS= read -r line; do
-      local to_remove=$(echo "$line" | awk '{print $1}' | sed "s|^~|$HOME|")
+      local to_remove=$(echo "$line" | awk '{print $2}' | sed "s|^~|$HOME|")
       # Try normal remove, then force, then manual cleanup
       if git -C "$MAIN_REPO" worktree remove "$to_remove" 2>/dev/null; then
         msg "Deleted: $to_remove"
@@ -2274,13 +2455,13 @@ main_menu() {
 
     # Construire les actions
     local actions=""
-    actions+=$'\n'"${C_DIM}-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=${C_RESET}"
-    actions+=$'\n'"  Create a worktree"
-    actions+=$'\n'"  Manage stashes"
+    actions+=$'\n'""  # Ligne vide comme séparateur
+    actions+=$'\n'"${C_DIM}＋${C_RESET} Create a worktree"
+    actions+=$'\n'"${C_DIM}⬡${C_RESET} Manage stashes"
     if [[ "$secondary_count" -ge 1 ]]; then
-      actions+=$'\n'"  Delete worktree(s)"
+      actions+=$'\n'"${C_DIM}✕${C_RESET} Delete worktree(s)"
     fi
-    actions+=$'\n'"  Quit"
+    actions+=$'\n'"${C_DIM}◀${C_RESET} Quit"
 
     local menu="${worktrees_formatted}${actions}"
 
@@ -2300,8 +2481,12 @@ main_menu() {
             if [[ \"\$line\" == \"<<>>\"* ]]; then
               exit 0
             fi
-            # Clean line (remove leading spaces for actions)
-            clean_line=\$(echo \"\$line\" | sed 's/^  //')
+            # Clean line (remove icon only for actions, not worktrees)
+            if [[ \"\$line\" == \"＋\"* || \"\$line\" == \"⬡\"* || \"\$line\" == \"✕\"* || \"\$line\" == \"◀\"* ]]; then
+              clean_line=\$(echo \"\$line\" | sed -E 's/^[^A-Za-z]*//')
+            else
+              clean_line=\"\$line\"
+            fi
             if [[ \"\$clean_line\" == \"Quit\"* ]]; then
               echo '> Exit wt'
             elif [[ \"\$clean_line\" == \"Create\"* ]]; then
@@ -2322,58 +2507,88 @@ main_menu() {
               echo 'Use Space to toggle selection.'
               echo ''
               echo 'Secondary worktrees ($secondary_count):'
-              git worktree list --porcelain | grep '^worktree ' | cut -d' ' -f2- | tail -n +2 | while read wt; do
+              /usr/bin/git worktree list --porcelain | /usr/bin/grep '^worktree ' | /usr/bin/cut -d' ' -f2- | /usr/bin/tail -n +2 | while read wt; do
                 echo \"  - \${wt/#\$HOME/~}\"
               done
             elif [[ \"\$clean_line\" == \"Manage stashes\"* ]]; then
               echo '> Manage git stashes'
               echo ''
-              stash_count=\$(git stash list 2>/dev/null | wc -l | tr -d ' ')
+              stash_count=\$(/usr/bin/git stash list 2>/dev/null | wc -l | tr -d ' ')
               echo \"Current stashes: \$stash_count\"
               echo ''
               if [[ \$stash_count -gt 0 ]]; then
-                git stash list 2>/dev/null | /usr/bin/head -5
+                /usr/bin/git stash list 2>/dev/null | /usr/bin/head -5
               else
                 echo 'No stashes found'
               fi
             else
-              path=\$(echo \"\$line\" | awk '{print \$1}' | sed \"s|^~|\$HOME|\")
+              path=\$(echo \"\$line\" | /usr/bin/awk '{print \$2}' | /usr/bin/sed \"s|^~|\$HOME|\")
               if [[ -d \"\$path\" ]]; then
-                branch=\$(git -C \"\$path\" branch --show-current 2>/dev/null || echo 'detached')
+                branch=\$(/usr/bin/git -C \"\$path\" branch --show-current 2>/dev/null || echo 'detached')
+                default_branch=\$(/usr/bin/git -C \"$MAIN_REPO\" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | /usr/bin/sed 's@^refs/remotes/origin/@@')
+                [[ -z \"\$default_branch\" ]] && default_branch=\"main\"
 
-                # Header
-                echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
-                echo \"  Branch: \$branch\"
-                echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
-                echo ''
+                # Header with merge status
+                printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+                if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]]; then
+                  if /usr/bin/git -C \"$MAIN_REPO\" branch --merged \"\$default_branch\" 2>/dev/null | /usr/bin/grep -qE \"^\\s*\$branch\$\"; then
+                    printf '  Branch: %s  \033[32m✓ merged\033[0m\n' \"\$branch\"
+                  else
+                    printf '  Branch: %s  \033[33m○ not merged\033[0m\n' \"\$branch\"
+                  fi
+                else
+                  printf '  Branch: %s\n' \"\$branch\"
+                fi
+                printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+
+                # Uncommitted changes
+                changes=\$(/usr/bin/git -C \"\$path\" status --porcelain 2>/dev/null)
+                if [[ -n \"\$changes\" ]]; then
+                  printf '  \033[33mUncommitted changes:\033[0m\n'
+                  echo \"\$changes\" | /usr/bin/head -8
+                  echo ''
+                fi
 
                 # Sync status with remote
-                tracking=\$(git -C \"\$path\" rev-parse --abbrev-ref @{upstream} 2>/dev/null)
+                tracking=\$(/usr/bin/git -C \"\$path\" rev-parse --abbrev-ref @{upstream} 2>/dev/null)
                 if [[ -n \"\$tracking\" ]]; then
-                  ahead=\$(git -C \"\$path\" rev-list --count @{upstream}..HEAD 2>/dev/null || echo 0)
-                  behind=\$(git -C \"\$path\" rev-list --count HEAD..@{upstream} 2>/dev/null || echo 0)
+                  ahead=\$(/usr/bin/git -C \"\$path\" rev-list --count @{upstream}..HEAD 2>/dev/null || echo 0)
+                  behind=\$(/usr/bin/git -C \"\$path\" rev-list --count HEAD..@{upstream} 2>/dev/null || echo 0)
                   if [[ \$ahead -gt 0 && \$behind -gt 0 ]]; then
-                    echo \"  ↑\$ahead ↓\$behind  (diverged from \$tracking)\"
+                    printf '  ↑%s ↓%s  (diverged from %s)\n' \"\$ahead\" \"\$behind\" \"\$tracking\"
                   elif [[ \$ahead -gt 0 ]]; then
-                    echo \"  ↑\$ahead ahead of \$tracking\"
+                    printf '  ↑%s ahead of %s\n' \"\$ahead\" \"\$tracking\"
                   elif [[ \$behind -gt 0 ]]; then
-                    echo \"  ↓\$behind behind \$tracking\"
+                    printf '  ↓%s behind %s\n' \"\$behind\" \"\$tracking\"
                   else
-                    echo \"  ✓ In sync with \$tracking\"
+                    printf '  ✓ In sync with %s\n' \"\$tracking\"
                   fi
                   echo ''
                 fi
 
-                # Uncommitted changes
-                if [[ -n \$(git -C \"\$path\" status --porcelain 2>/dev/null) ]]; then
-                  echo '  Uncommitted changes:'
-                  git -C \"\$path\" status --short 2>/dev/null | /usr/bin/head -8
-                  echo ''
-                fi
-
                 # Recent commits
-                echo '  Recent commits:'
-                git -C \"\$path\" log --oneline --graph --color=always -8 2>/dev/null
+                printf '  Recent commits:\n'
+                /usr/bin/git -C \"\$path\" log --oneline --graph --color=always -8 2>/dev/null
+                echo ''
+
+                # PR status (at the end, can be slow)
+                if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]] && command -v gh &>/dev/null; then
+                  pr_info=\$(gh pr view \"\$branch\" --json state,number,title 2>/dev/null)
+                  if [[ -n \"\$pr_info\" ]]; then
+                    pr_state=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.state')
+                    pr_number=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.number')
+                    pr_title=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.title[0:50]')
+                    printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+                    if [[ \"\$pr_state\" == \"MERGED\" ]]; then
+                      printf '  \033[32m✓ PR #%s MERGED\033[0m\n' \"\$pr_number\"
+                    elif [[ \"\$pr_state\" == \"CLOSED\" ]]; then
+                      printf '  \033[31m✗ PR #%s CLOSED\033[0m\n' \"\$pr_number\"
+                    else
+                      printf '  \033[34m○ PR #%s OPEN\033[0m\n' \"\$pr_number\"
+                    fi
+                    printf '  %s\n' \"\$pr_title\"
+                  fi
+                fi
               else
                 echo 'Invalid path'
               fi
@@ -2388,8 +2603,8 @@ main_menu() {
     # Handle keyboard shortcuts
     case "$key" in
       ctrl-e)
-        if [[ -n "$selected" && "$selected" != "───"* && "$selected" != "  "* ]]; then
-          local path=$(echo "$selected" | awk '{print $1}' | sed "s|^~|$HOME|")
+        if [[ -n "$selected" && "$selected" != "───"* && "$selected" != "＋"* && "$selected" != "⬡"* && "$selected" != "✕"* && "$selected" != "◀"* ]]; then
+          local path=$(echo "$selected" | awk '{print $2}' | sed "s|^~|$HOME|")
           if [[ -d "$path" ]]; then
             local editor=$(get_editor)
             msg "Opening in $editor: $path"
@@ -2446,8 +2661,13 @@ main_menu() {
       continue
     fi
 
-    # Clean action lines (remove leading spaces)
-    local clean_selected=$(echo "$selected" | sed 's/^  //')
+    # Clean action lines (remove icon only for actions, not worktrees)
+    local clean_selected
+    if [[ "$selected" == "＋"* || "$selected" == "⬡"* || "$selected" == "✕"* || "$selected" == "◀"* ]]; then
+      clean_selected=$(echo "$selected" | sed -E 's/^[^A-Za-z]*//')
+    else
+      clean_selected="$selected"
+    fi
 
     case "$clean_selected" in
       "Create"*)
@@ -2474,7 +2694,7 @@ main_menu() {
         ;;
       *)
         # C'est un worktree existant - extraire et retourner le path
-        local path=$(echo "$selected" | awk '{print $1}' | sed "s|^~|$HOME|")
+        local path=$(echo "$selected" | awk '{print $2}' | sed "s|^~|$HOME|")
         if [[ -d "$path" ]]; then
           echo "$path"
           return 0
@@ -2533,7 +2753,7 @@ if [[ -n "$1" && "$1" != "--"* ]]; then
   worktrees_list=$(format_all_worktrees)
   match=$(echo "$worktrees_list" | fzf --filter="$1" | head -1)
   if [[ -n "$match" ]]; then
-    path=$(echo "$match" | awk '{print $1}' | sed "s|^~|$HOME|")
+    path=$(echo "$match" | awk '{print $2}' | sed "s|^~|$HOME|")
     if [[ -d "$path" ]]; then
       echo "$path"
       exit 0
