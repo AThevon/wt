@@ -1833,7 +1833,7 @@ Enter: actions menu │ Space: multi-select │ ?: show all shortcuts"
         # Show diff complet
         if [[ -n "$selected" ]]; then
           local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
-          git stash show -p "$stash_ref" | less </dev/tty
+          less <(git stash show -p "$stash_ref") </dev/tty
         fi
         continue
         ;;
@@ -2116,7 +2116,7 @@ Back"
         msg "Exported to $patch_file"
         ;;
       "Show"*)
-        git stash show -p "$stash_ref" | less </dev/tty
+        less <(git stash show -p "$stash_ref") </dev/tty
         ;;
       "Rename"*)
         msg "Enter new stash message:"
