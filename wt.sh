@@ -18,6 +18,49 @@ if [[ "$1" == "--version" || "$1" == "-v" ]]; then
   exit 0
 fi
 
+# Mode dev: génère une fonction shell pointant vers ce script local
+if [[ "$1" == "--dev" ]]; then
+  local_script="$(cd "$(dirname "$0")" && pwd)/wt.sh"
+  cat <<EOF
+# wt - Dev Mode (local script)
+unalias wt 2>/dev/null
+function wt() {
+  if [[ "\$1" == "--release" ]]; then
+    eval "\$(wt-core --shell-init)"
+    echo "Switched to release mode: wt-core"
+    return
+  fi
+  if [[ "\$1" == "--dev" ]]; then
+    echo "Already in dev mode: $local_script"
+    return
+  fi
+
+  local output=\$(WT_WRAPPED=1 "$local_script" "\$@")
+  local target=""
+  local claude_cmd=""
+
+  while IFS= read -r line; do
+    if [[ "\$line" == CLAUDE:* ]]; then
+      claude_cmd="\$line"
+    elif [[ -n "\$line" && -d "\$line" ]]; then
+      target="\$line"
+    fi
+  done <<< "\$output"
+
+  if [[ -n "\$target" ]]; then
+    local current_wt=\$(git rev-parse --show-toplevel 2>/dev/null)
+    if [[ -n "\$current_wt" && "\$current_wt" != "\$target" ]]; then
+      echo "\$current_wt" > ~/.wt_prev
+    fi
+    cd "\$target"
+    echo "Navigated to: \$target"
+  fi
+}
+echo "Switched to dev mode: $local_script"
+EOF
+  exit 0
+fi
+
 if [[ "$1" == "--shell-init" ]]; then
   cat <<'EOF'
 # wt - Git Worktree Manager
@@ -1384,7 +1427,125 @@ menu_create_worktree() {
 }
 
 # =============================================================================
-# Stash Management
+# Stash Management - Helper functions
+# =============================================================================
+
+# Formatte l'âge d'un stash de manière lisible
+_stash_age() {
+  local stash_ref="$1"
+  local stash_date=$(git log -1 --format="%ci" "$stash_ref" 2>/dev/null)
+  if [[ -z "$stash_date" ]]; then
+    echo "?"
+    return
+  fi
+
+  local stash_ts=$(date -j -f "%Y-%m-%d %H:%M:%S %z" "$stash_date" "+%s" 2>/dev/null || date -d "$stash_date" "+%s" 2>/dev/null)
+  local now_ts=$(date "+%s")
+  local diff=$((now_ts - stash_ts))
+
+  if [[ $diff -lt 3600 ]]; then
+    echo "$((diff / 60))m"
+  elif [[ $diff -lt 86400 ]]; then
+    echo "$((diff / 3600))h"
+  elif [[ $diff -lt 604800 ]]; then
+    echo "$((diff / 86400))d"
+  elif [[ $diff -lt 2592000 ]]; then
+    echo "$((diff / 604800))w"
+  else
+    echo "$((diff / 2592000))mo"
+  fi
+}
+
+# Compte les fichiers dans un stash
+_stash_file_count() {
+  local stash_ref="$1"
+  git stash show --name-only "$stash_ref" 2>/dev/null | wc -l | tr -d ' '
+}
+
+# Extrait la branche d'origine du stash
+_stash_branch() {
+  local stash_line="$1"
+  echo "$stash_line" | sed -n 's/.*on \([^:]*\):.*/\1/p'
+}
+
+# Extrait le message du stash
+_stash_message() {
+  local stash_line="$1"
+  local msg=$(echo "$stash_line" | sed 's/.*: //')
+  # Tronquer si trop long
+  if [[ ${#msg} -gt 40 ]]; then
+    echo "${msg:0:37}..."
+  else
+    echo "$msg"
+  fi
+}
+
+# Génère la liste formatée des stashes
+_format_stash_list() {
+  local stashes="$1"
+  while IFS= read -r line; do
+    local ref=$(echo "$line" | cut -d: -f1)
+    local age=$(_stash_age "$ref")
+    local files=$(_stash_file_count "$ref")
+    local branch=$(_stash_branch "$line")
+    local message=$(_stash_message "$line")
+
+    # Tronquer la branche si trop longue
+    if [[ ${#branch} -gt 12 ]]; then
+      branch="${branch:0:9}..."
+    fi
+
+    # Format: stash@{0} │ 3d │ 5f │ main │ message
+    printf "%-11s │ %4s │ %3sf │ %-12s │ %s\n" "$ref" "$age" "$files" "$branch" "$message"
+  done <<< "$stashes"
+}
+
+# Créer un stash partiel (sélection de fichiers)
+_stash_partial() {
+  local modified=$(git diff --name-only 2>/dev/null)
+  local staged=$(git diff --cached --name-only 2>/dev/null)
+  local untracked=$(git ls-files --others --exclude-standard 2>/dev/null)
+
+  local all_files=$(printf "%s\n%s\n%s" "$modified" "$staged" "$untracked" | sort -u | grep -v '^$')
+
+  if [[ -z "$all_files" ]]; then
+    msg "No changes to stash"
+    return 1
+  fi
+
+  msg "Select files to stash (Tab to select, Enter to confirm):"
+
+  local selected=$(echo "$all_files" | \
+    fzf --height=60% \
+        --layout=reverse \
+        --border \
+        --multi \
+        --marker='+ ' \
+        --bind 'tab:toggle+down' \
+        --header="Tab: select | Enter: stash selected | Esc: cancel" \
+        --preview="git diff --color=always -- {} 2>/dev/null || git diff --cached --color=always -- {} 2>/dev/null || cat {}" \
+        --preview-window=right:50%)
+
+  if [[ -z "$selected" ]]; then
+    return 1
+  fi
+
+  msg "Enter stash message (or leave empty):"
+  local stash_msg
+  read -r stash_msg </dev/tty
+
+  # Stash uniquement les fichiers sélectionnés
+  if [[ -n "$stash_msg" ]]; then
+    echo "$selected" | xargs git stash push -m "$stash_msg" --
+  else
+    echo "$selected" | xargs git stash push --
+  fi
+
+  msg "Partial stash created"
+}
+
+# =============================================================================
+# Stash Management - Main menu
 # =============================================================================
 
 menu_stash() {
@@ -1394,7 +1555,8 @@ menu_stash() {
     if [[ -z "$stashes" ]]; then
       # Proposer de créer un stash
       local choice=$(printf "%s\n" \
-        "Create a stash" \
+        "Create stash (all changes)" \
+        "Create partial stash (select files)" \
         "Back" | \
         fzf --height=30% \
             --layout=reverse \
@@ -1402,16 +1564,19 @@ menu_stash() {
             --header="No stashes found")
 
       case "$choice" in
-        "Create"*)
+        "Create stash (all"*)
           msg "Enter stash message (or leave empty):"
           local stash_msg
           read -r stash_msg </dev/tty
           if [[ -n "$stash_msg" ]]; then
-            git stash push -m "$stash_msg" >/dev/null 2>&1
+            git stash push -u -m "$stash_msg" >/dev/null 2>&1
           else
-            git stash push >/dev/null 2>&1
+            git stash push -u >/dev/null 2>&1
           fi
           msg "Stash created"
+          ;;
+        "Create partial"*)
+          _stash_partial
           ;;
         *)
           return 1
@@ -1420,65 +1585,279 @@ menu_stash() {
       continue
     fi
 
+    # Générer la liste formatée
+    local formatted_list=$(_format_stash_list "$stashes")
+
+    # Header avec légende
+    local header="ref         │ age  │ files │ branch       │ message
+────────────┼──────┼───────┼──────────────┼─────────────────────────────
+Enter: actions │ Ctrl+A: apply │ Ctrl+P: pop │ Ctrl+D: drop │ Ctrl+B: branch
+Ctrl+N: new stash │ Ctrl+E: partial stash │ Ctrl+X: export patch │ Space: multi-select"
+
     # Afficher les stashes avec actions
-    local result=$(echo "$stashes" | \
-      fzf --height=60% \
+    local result=$(echo "$formatted_list" | \
+      fzf --height=80% \
           --layout=reverse \
           --border \
-          --header="Stashes | Enter: select action | Ctrl+N: new stash" \
-          --preview="
-            stash_ref=\$(echo {} | cut -d: -f1)
-            echo 'Stash content:'
-            echo '=============='
-            git stash show -p \"\$stash_ref\" 2>/dev/null | /usr/bin/head -50
-          " \
-          --preview-window=right:60% \
-          --expect=ctrl-n)
+          --ansi \
+          --multi \
+          --marker='> ' \
+          --bind 'space:toggle+down' \
+          --header="$header" \
+          --preview='
+            stash_ref=$(echo {} | cut -d" " -f1)
+
+            # Date de création
+            stash_date=$(git log -1 --format="%ci" "$stash_ref" 2>/dev/null | cut -d" " -f1,2)
+
+            # Branche d origine
+            stash_info=$(git stash list 2>/dev/null | grep "^$stash_ref")
+            branch=$(echo "$stash_info" | sed -n "s/.*on \([^:]*\):.*/\1/p")
+
+            # Stats
+            stats=$(git stash show --stat "$stash_ref" 2>/dev/null | tail -1)
+            files=$(echo "$stats" | grep -oE "[0-9]+ file" | grep -oE "[0-9]+")
+            insertions=$(echo "$stats" | grep -oE "[0-9]+ insertion" | grep -oE "[0-9]+")
+            deletions=$(echo "$stats" | grep -oE "[0-9]+ deletion" | grep -oE "[0-9]+")
+
+            [ -z "$files" ] && files="0"
+            [ -z "$insertions" ] && insertions="0"
+            [ -z "$deletions" ] && deletions="0"
+
+            # Vérifier les conflits potentiels
+            stash_files=$(git stash show --name-only "$stash_ref" 2>/dev/null)
+            modified_files=$(git diff --name-only HEAD 2>/dev/null)
+            staged_files=$(git diff --cached --name-only 2>/dev/null)
+
+            conflict_files=""
+            while IFS= read -r sf; do
+              if echo "$modified_files" | grep -qx "$sf" 2>/dev/null || echo "$staged_files" | grep -qx "$sf" 2>/dev/null; then
+                conflict_files="${conflict_files}  ! ${sf}\n"
+              fi
+            done <<< "$stash_files"
+
+            # Affichage
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  STASH INFO"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "  Date    : $stash_date"
+            echo "  Branch  : $branch"
+            echo "  Stats   : $files files | +$insertions -$deletions lines"
+            echo ""
+
+            # Warning conflits
+            if [ -n "$conflict_files" ]; then
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "  ⚠ POTENTIAL CONFLICTS"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo ""
+              printf "$conflict_files"
+              echo ""
+            fi
+
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  FILES CHANGED"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+
+            # Liste des fichiers avec stats
+            git stash show --numstat "$stash_ref" 2>/dev/null | while IFS=$(printf "\t") read -r added removed file; do
+              if [ "$added" = "-" ]; then
+                added="bin"
+                removed="bin"
+              fi
+              printf "  %4s %4s  %s\n" "+$added" "-$removed" "$file"
+            done
+          ' \
+          --preview-window=right:50% \
+          --expect=ctrl-n,ctrl-a,ctrl-p,ctrl-d,ctrl-b,ctrl-s,ctrl-e,ctrl-x)
 
     local key=$(echo "$result" | head -1)
     local selected=$(echo "$result" | tail -n +2)
 
-    if [[ "$key" == "ctrl-n" ]]; then
-      msg "Enter stash message (or leave empty):"
-      local stash_msg
-      read -r stash_msg </dev/tty
-      if [[ -n "$stash_msg" ]]; then
-        git stash push -m "$stash_msg" >/dev/null 2>&1
-      else
-        git stash push >/dev/null 2>&1
-      fi
-      msg "Stash created"
-      continue
-    fi
+    # Actions avec raccourcis directs
+    case "$key" in
+      "ctrl-n")
+        # Nouveau stash (tous les changements)
+        msg "Enter stash message (or leave empty):"
+        local stash_msg
+        read -r stash_msg </dev/tty
+        if [[ -n "$stash_msg" ]]; then
+          git stash push -u -m "$stash_msg" >/dev/null 2>&1
+        else
+          git stash push -u >/dev/null 2>&1
+        fi
+        msg "Stash created"
+        continue
+        ;;
+      "ctrl-e")
+        # Stash partiel
+        _stash_partial
+        continue
+        ;;
+      "ctrl-a")
+        # Apply direct
+        if [[ -n "$selected" ]]; then
+          local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
+          if git stash apply "$stash_ref" 2>&1; then
+            msg "Stash $stash_ref applied"
+          else
+            msg "Error applying stash (conflicts?)"
+          fi
+        fi
+        continue
+        ;;
+      "ctrl-p")
+        # Pop direct
+        if [[ -n "$selected" ]]; then
+          local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
+          if git stash pop "$stash_ref" 2>&1; then
+            msg "Stash $stash_ref popped"
+          else
+            msg "Error popping stash (conflicts?)"
+          fi
+        fi
+        continue
+        ;;
+      "ctrl-d")
+        # Drop (multi-select supporté)
+        if [[ -n "$selected" ]]; then
+          local count=$(echo "$selected" | wc -l | tr -d ' ')
+          local confirm=$(printf "%s\n" "Yes, delete $count stash(es)" "No, cancel" | \
+            fzf --height=20% --layout=reverse --border --header="Delete selected stash(es)?")
+          if [[ "$confirm" == "Yes"* ]]; then
+            # Drop en ordre inverse pour éviter les problèmes d'index
+            echo "$selected" | tac | while IFS= read -r line; do
+              local ref=$(echo "$line" | cut -d' ' -f1)
+              git stash drop "$ref" >/dev/null 2>&1
+            done
+            msg "$count stash(es) dropped"
+          fi
+        fi
+        continue
+        ;;
+      "ctrl-b")
+        # Créer une branche depuis le stash
+        if [[ -n "$selected" ]]; then
+          local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
+          msg "Enter branch name:"
+          local branch_name
+          read -r branch_name </dev/tty
+          if [[ -n "$branch_name" ]]; then
+            if git stash branch "$branch_name" "$stash_ref" 2>&1; then
+              msg "Branch '$branch_name' created from $stash_ref"
+              return 0
+            else
+              msg "Error creating branch"
+            fi
+          fi
+        fi
+        continue
+        ;;
+      "ctrl-x")
+        # Export en patch
+        if [[ -n "$selected" ]]; then
+          local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
+          local stash_num=$(echo "$stash_ref" | grep -oE '[0-9]+')
+          local patch_file="stash-${stash_num}-$(date +%Y%m%d-%H%M%S).patch"
+          git stash show -p "$stash_ref" > "$patch_file"
+          msg "Exported to $patch_file"
+        fi
+        continue
+        ;;
+      "ctrl-s")
+        # Show diff complet
+        if [[ -n "$selected" ]]; then
+          local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
+          git stash show -p "$stash_ref" | less
+        fi
+        continue
+        ;;
+    esac
 
+    # Si Esc ou aucune sélection
     if [[ -z "$selected" ]]; then
       return 1
     fi
 
-    local stash_ref=$(echo "$selected" | cut -d: -f1)
+    # Si Enter: menu d'actions classique
+    local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
 
     # Menu d'actions pour le stash sélectionné
     local action=$(printf "%s\n" \
       "Apply (keep stash)" \
       "Pop (apply and remove)" \
       "Drop (delete)" \
-      "Show diff" \
+      "Create branch from stash" \
+      "Export as patch" \
+      "Show full diff" \
+      "Rename stash" \
       "Back" | \
-      fzf --height=30% \
+      fzf --height=40% \
           --layout=reverse \
           --border \
-          --header="Action for $stash_ref")
+          --header="Action for $stash_ref" \
+          --preview='
+            action=$(echo {} | cut -d" " -f1)
+            case "$action" in
+              "Apply")
+                echo "Apply the stash changes to your working directory."
+                echo "The stash will remain in the stash list."
+                echo ""
+                echo "Equivalent to: git stash apply"
+                ;;
+              "Pop")
+                echo "Apply the stash changes and remove it from the list."
+                echo "Use this when you are done with the stash."
+                echo ""
+                echo "Equivalent to: git stash pop"
+                ;;
+              "Drop")
+                echo "Permanently delete this stash."
+                echo "This action cannot be undone!"
+                echo ""
+                echo "Equivalent to: git stash drop"
+                ;;
+              "Create")
+                echo "Create a new branch from this stash."
+                echo "The stash will be applied and removed."
+                echo ""
+                echo "Equivalent to: git stash branch <name>"
+                ;;
+              "Export")
+                echo "Export the stash as a .patch file."
+                echo "Useful for sharing or backup."
+                echo ""
+                echo "Equivalent to: git stash show -p > file.patch"
+                ;;
+              "Show")
+                echo "View the complete diff of this stash."
+                echo "Opens in less for easy navigation."
+                echo ""
+                echo "Equivalent to: git stash show -p | less"
+                ;;
+              "Rename")
+                echo "Rename this stash with a new message."
+                echo "(Drops and recreates the stash)"
+                ;;
+              *)
+                echo "Return to stash list"
+                ;;
+            esac
+          ' \
+          --preview-window=right:50%)
 
     case "$action" in
       "Apply"*)
-        if git stash apply "$stash_ref" >/dev/null 2>&1; then
+        if git stash apply "$stash_ref" 2>&1; then
           msg "Stash applied"
         else
           msg "Error applying stash (conflicts?)"
         fi
         ;;
       "Pop"*)
-        if git stash pop "$stash_ref" >/dev/null 2>&1; then
+        if git stash pop "$stash_ref" 2>&1; then
           msg "Stash popped"
         else
           msg "Error popping stash (conflicts?)"
@@ -1492,8 +1871,44 @@ menu_stash() {
           msg "Stash dropped"
         fi
         ;;
-      "Show diff"*)
+      "Create branch"*)
+        msg "Enter branch name:"
+        local branch_name
+        read -r branch_name </dev/tty
+        if [[ -n "$branch_name" ]]; then
+          if git stash branch "$branch_name" "$stash_ref" 2>&1; then
+            msg "Branch '$branch_name' created from $stash_ref"
+            return 0
+          else
+            msg "Error creating branch"
+          fi
+        fi
+        ;;
+      "Export"*)
+        local stash_num=$(echo "$stash_ref" | grep -oE '[0-9]+')
+        local patch_file="stash-${stash_num}-$(date +%Y%m%d-%H%M%S).patch"
+        git stash show -p "$stash_ref" > "$patch_file"
+        msg "Exported to $patch_file"
+        ;;
+      "Show"*)
         git stash show -p "$stash_ref" | less
+        ;;
+      "Rename"*)
+        msg "Enter new stash message:"
+        local new_msg
+        read -r new_msg </dev/tty
+        if [[ -n "$new_msg" ]]; then
+          # Sauvegarder le contenu, drop, et recréer avec le nouveau message
+          local temp_branch="temp-stash-rename-$$"
+          if git stash branch "$temp_branch" "$stash_ref" >/dev/null 2>&1; then
+            git stash push -m "$new_msg" >/dev/null 2>&1
+            git checkout - >/dev/null 2>&1
+            git branch -D "$temp_branch" >/dev/null 2>&1
+            msg "Stash renamed"
+          else
+            msg "Error renaming stash"
+          fi
+        fi
         ;;
       *)
         # Back, continue loop
