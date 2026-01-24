@@ -682,18 +682,55 @@ get_secondary_worktrees() {
   get_worktrees | tail -n +2
 }
 
+# Get the default branch (main or master)
+get_default_branch() {
+  local default_branch=$(git -C "$MAIN_REPO" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+  if [[ -z "$default_branch" ]]; then
+    default_branch="main"
+  fi
+  echo "$default_branch"
+}
+
+# Check if a branch is merged into the default branch (fast, local check)
+is_branch_merged() {
+  local branch="$1"
+  local default_branch=$(get_default_branch)
+
+  # Skip check for the default branch itself
+  if [[ "$branch" == "$default_branch" ]]; then
+    return 1
+  fi
+
+  # Check if branch is merged into default branch
+  git -C "$MAIN_REPO" branch --merged "$default_branch" 2>/dev/null | grep -qE "^\s*$branch$"
+}
+
 format_worktree_line() {
   local wt_path="$1"
   local branch=$(git -C "$wt_path" branch --show-current 2>/dev/null || echo "detached")
   local short_path="${wt_path/#$HOME/~}"
+  local default_branch=$(get_default_branch)
 
   # Dirty check
   local dirty=""
   if [[ -n $(git -C "$wt_path" status --porcelain 2>/dev/null) ]]; then
-    dirty="*"
+    dirty=" *"
   fi
 
-  printf "%-50s %s[%s]\n" "$short_path" "$dirty" "$branch"
+  # Status indicator at the beginning
+  local status_icon
+  if [[ "$branch" == "$default_branch" ]]; then
+    # Main branch - neutral
+    status_icon="${C_DIM}●${C_RESET}"
+  elif is_branch_merged "$branch"; then
+    # Merged - green checkmark
+    status_icon="${C_GREEN}✓${C_RESET}"
+  else
+    # Not merged - orange circle (in progress)
+    status_icon="${C_ORANGE}○${C_RESET}"
+  fi
+
+  printf "%s %-48s %s[%s]\n" "$status_icon" "$short_path" "$dirty" "$branch"
 }
 
 format_all_worktrees() {
@@ -2170,15 +2207,56 @@ action_delete_worktrees() {
         --bind 'space:toggle+down' \
         --header="Select worktree(s) to delete | Space: select | Enter: confirm" \
         --preview="
-          path=\$(echo {} | awk '{print \$1}' | sed \"s|^~|\$HOME|\")
+          path=\$(echo {} | /usr/bin/awk '{print \$1}' | /usr/bin/sed \"s|^~|\$HOME|\")
           if [[ -d \"\$path\" ]]; then
-            echo \"Path: \$path\"
+            branch=\$(/usr/bin/git -C \"\$path\" branch --show-current 2>/dev/null || echo 'detached')
+            default_branch=\$(/usr/bin/git -C \"$MAIN_REPO\" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | /usr/bin/sed 's@^refs/remotes/origin/@@')
+            [[ -z \"\$default_branch\" ]] && default_branch=\"main\"
+
+            # Header with merge status
+            printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+            if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]]; then
+              if /usr/bin/git -C \"$MAIN_REPO\" branch --merged \"\$default_branch\" 2>/dev/null | /usr/bin/grep -qE \"^\\s*\$branch\$\"; then
+                printf '  Branch: %s  \033[32m✓ merged\033[0m\n' \"\$branch\"
+              else
+                printf '  Branch: %s  \033[33m○ not merged\033[0m\n' \"\$branch\"
+              fi
+            else
+              printf '  Branch: %s\n' \"\$branch\"
+            fi
+            printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+
+            # Uncommitted changes
+            changes=\$(/usr/bin/git -C \"\$path\" status --porcelain 2>/dev/null)
+            if [[ -n \"\$changes\" ]]; then
+              printf '  \033[33mUncommitted changes:\033[0m\n'
+              echo \"\$changes\" | /usr/bin/head -8
+              echo ''
+            fi
+
+            # Recent commits
+            printf '  Recent commits:\n'
+            /usr/bin/git -C \"\$path\" log --oneline -5 2>/dev/null
             echo ''
-            echo 'Status:'
-            git -C \"\$path\" status --short 2>/dev/null | /usr/bin/head -10
-            echo ''
-            echo 'Recent commits:'
-            git -C \"\$path\" log --oneline -5 2>/dev/null
+
+            # PR status (at the end)
+            if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]] && command -v gh &>/dev/null; then
+              pr_info=\$(gh pr view \"\$branch\" --json state,number,title 2>/dev/null)
+              if [[ -n \"\$pr_info\" ]]; then
+                pr_state=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.state')
+                pr_number=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.number')
+                pr_title=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.title[0:40]')
+                printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+                if [[ \"\$pr_state\" == \"MERGED\" ]]; then
+                  printf '  \033[32m✓ PR #%s MERGED\033[0m\n' \"\$pr_number\"
+                elif [[ \"\$pr_state\" == \"CLOSED\" ]]; then
+                  printf '  \033[31m✗ PR #%s CLOSED\033[0m\n' \"\$pr_number\"
+                else
+                  printf '  \033[34m○ PR #%s OPEN\033[0m\n' \"\$pr_number\"
+                fi
+                printf '  %s\n' \"\$pr_title\"
+              fi
+            fi
           fi
         " \
         --preview-window=right:50% < "$tmpfile")
@@ -2322,58 +2400,88 @@ main_menu() {
               echo 'Use Space to toggle selection.'
               echo ''
               echo 'Secondary worktrees ($secondary_count):'
-              git worktree list --porcelain | grep '^worktree ' | cut -d' ' -f2- | tail -n +2 | while read wt; do
+              /usr/bin/git worktree list --porcelain | /usr/bin/grep '^worktree ' | /usr/bin/cut -d' ' -f2- | /usr/bin/tail -n +2 | while read wt; do
                 echo \"  - \${wt/#\$HOME/~}\"
               done
             elif [[ \"\$clean_line\" == \"Manage stashes\"* ]]; then
               echo '> Manage git stashes'
               echo ''
-              stash_count=\$(git stash list 2>/dev/null | wc -l | tr -d ' ')
+              stash_count=\$(/usr/bin/git stash list 2>/dev/null | wc -l | tr -d ' ')
               echo \"Current stashes: \$stash_count\"
               echo ''
               if [[ \$stash_count -gt 0 ]]; then
-                git stash list 2>/dev/null | /usr/bin/head -5
+                /usr/bin/git stash list 2>/dev/null | /usr/bin/head -5
               else
                 echo 'No stashes found'
               fi
             else
-              path=\$(echo \"\$line\" | awk '{print \$1}' | sed \"s|^~|\$HOME|\")
+              path=\$(echo \"\$line\" | /usr/bin/awk '{print \$1}' | /usr/bin/sed \"s|^~|\$HOME|\")
               if [[ -d \"\$path\" ]]; then
-                branch=\$(git -C \"\$path\" branch --show-current 2>/dev/null || echo 'detached')
+                branch=\$(/usr/bin/git -C \"\$path\" branch --show-current 2>/dev/null || echo 'detached')
+                default_branch=\$(/usr/bin/git -C \"$MAIN_REPO\" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | /usr/bin/sed 's@^refs/remotes/origin/@@')
+                [[ -z \"\$default_branch\" ]] && default_branch=\"main\"
 
-                # Header
-                echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
-                echo \"  Branch: \$branch\"
-                echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"
-                echo ''
+                # Header with merge status
+                printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+                if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]]; then
+                  if /usr/bin/git -C \"$MAIN_REPO\" branch --merged \"\$default_branch\" 2>/dev/null | /usr/bin/grep -qE \"^\\s*\$branch\$\"; then
+                    printf '  Branch: %s  \033[32m✓ merged\033[0m\n' \"\$branch\"
+                  else
+                    printf '  Branch: %s  \033[33m○ not merged\033[0m\n' \"\$branch\"
+                  fi
+                else
+                  printf '  Branch: %s\n' \"\$branch\"
+                fi
+                printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
+
+                # Uncommitted changes
+                changes=\$(/usr/bin/git -C \"\$path\" status --porcelain 2>/dev/null)
+                if [[ -n \"\$changes\" ]]; then
+                  printf '  \033[33mUncommitted changes:\033[0m\n'
+                  echo \"\$changes\" | /usr/bin/head -8
+                  echo ''
+                fi
 
                 # Sync status with remote
-                tracking=\$(git -C \"\$path\" rev-parse --abbrev-ref @{upstream} 2>/dev/null)
+                tracking=\$(/usr/bin/git -C \"\$path\" rev-parse --abbrev-ref @{upstream} 2>/dev/null)
                 if [[ -n \"\$tracking\" ]]; then
-                  ahead=\$(git -C \"\$path\" rev-list --count @{upstream}..HEAD 2>/dev/null || echo 0)
-                  behind=\$(git -C \"\$path\" rev-list --count HEAD..@{upstream} 2>/dev/null || echo 0)
+                  ahead=\$(/usr/bin/git -C \"\$path\" rev-list --count @{upstream}..HEAD 2>/dev/null || echo 0)
+                  behind=\$(/usr/bin/git -C \"\$path\" rev-list --count HEAD..@{upstream} 2>/dev/null || echo 0)
                   if [[ \$ahead -gt 0 && \$behind -gt 0 ]]; then
-                    echo \"  ↑\$ahead ↓\$behind  (diverged from \$tracking)\"
+                    printf '  ↑%s ↓%s  (diverged from %s)\n' \"\$ahead\" \"\$behind\" \"\$tracking\"
                   elif [[ \$ahead -gt 0 ]]; then
-                    echo \"  ↑\$ahead ahead of \$tracking\"
+                    printf '  ↑%s ahead of %s\n' \"\$ahead\" \"\$tracking\"
                   elif [[ \$behind -gt 0 ]]; then
-                    echo \"  ↓\$behind behind \$tracking\"
+                    printf '  ↓%s behind %s\n' \"\$behind\" \"\$tracking\"
                   else
-                    echo \"  ✓ In sync with \$tracking\"
+                    printf '  ✓ In sync with %s\n' \"\$tracking\"
                   fi
                   echo ''
                 fi
 
-                # Uncommitted changes
-                if [[ -n \$(git -C \"\$path\" status --porcelain 2>/dev/null) ]]; then
-                  echo '  Uncommitted changes:'
-                  git -C \"\$path\" status --short 2>/dev/null | /usr/bin/head -8
-                  echo ''
-                fi
-
                 # Recent commits
-                echo '  Recent commits:'
-                git -C \"\$path\" log --oneline --graph --color=always -8 2>/dev/null
+                printf '  Recent commits:\n'
+                /usr/bin/git -C \"\$path\" log --oneline --graph --color=always -8 2>/dev/null
+                echo ''
+
+                # PR status (at the end, can be slow)
+                if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]] && command -v gh &>/dev/null; then
+                  pr_info=\$(gh pr view \"\$branch\" --json state,number,title 2>/dev/null)
+                  if [[ -n \"\$pr_info\" ]]; then
+                    pr_state=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.state')
+                    pr_number=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.number')
+                    pr_title=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.title[0:50]')
+                    printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+                    if [[ \"\$pr_state\" == \"MERGED\" ]]; then
+                      printf '  \033[32m✓ PR #%s MERGED\033[0m\n' \"\$pr_number\"
+                    elif [[ \"\$pr_state\" == \"CLOSED\" ]]; then
+                      printf '  \033[31m✗ PR #%s CLOSED\033[0m\n' \"\$pr_number\"
+                    else
+                      printf '  \033[34m○ PR #%s OPEN\033[0m\n' \"\$pr_number\"
+                    fi
+                    printf '  %s\n' \"\$pr_title\"
+                  fi
+                fi
               else
                 echo 'Invalid path'
               fi
