@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.6.0"
+VERSION="1.7.0"
 
 # =============================================================================
 # Options de ligne de commande
@@ -115,85 +115,22 @@ function wt() {
 
       local claude_flags=""
       local prompt=""
+      local pr_term=$(wt-core --get-pr-term 2>/dev/null || echo "PR")
 
       # Handle auto-resolve (always forced, no mode param)
       if [[ "$type" == "issue-auto" ]]; then
         claude_flags="--dangerously-skip-permissions"
         echo ""
         echo ">> AUTO-RESOLVE: Issue #$num"
-        echo "   Claude will plan, implement, and create a PR automatically."
+        echo "   Claude will plan, implement, and create a $pr_term automatically."
         echo ""
-
-        prompt="You are auto-resolving GitHub Issue #$num.
-
-MISSION: Fully resolve this issue autonomously and create a Pull Request.
-
-PHASE 1 - UNDERSTAND:
-1. Run 'gh issue view $num' to read the issue details
-2. Identify exactly what needs to be done
-3. Note acceptance criteria and constraints
-
-PHASE 2 - EXPLORE:
-4. Explore the codebase to understand the architecture
-5. Find relevant files and patterns
-6. Identify what needs to change
-
-PHASE 3 - IMPLEMENT:
-7. Make the necessary code changes
-8. Follow existing code patterns and conventions
-9. Handle edge cases and errors appropriately
-10. Add tests if the project has them
-
-PHASE 4 - VERIFY:
-11. Detect the package manager (check for pnpm-lock.yaml, yarn.lock, or package-lock.json)
-12. Run the project's test/build commands if available (pnpm/yarn/npm test, build, etc.)
-13. Fix any errors before proceeding - do not push broken code
-
-PHASE 5 - DELIVER:
-14. Commit your changes with a clear message referencing #$num
-15. Push the branch
-16. Create a PR with 'gh pr create' that:
-    - References the issue (Closes #$num)
-    - Describes what was changed and why
-    - Lists any considerations or trade-offs
-
-Be thorough but efficient. Ship working code."
 
       elif [[ "$type" == "ci-fix" ]]; then
         claude_flags="--dangerously-skip-permissions"
         echo ""
-        echo ">> AUTO-FIX CI: PR #$num"
+        echo ">> AUTO-FIX CI: $pr_term #$num"
         echo "   Claude will fetch CI logs, fix the issues, and push."
         echo ""
-
-        prompt="You are fixing CI failures for Pull Request #$num.
-
-MISSION: Analyze the CI failure logs, fix the issues, and push the fix.
-
-PHASE 1 - GET CI LOGS:
-1. Run 'gh run list --branch \$(git branch --show-current) --limit 5' to find recent workflow runs
-2. Find the failed run ID
-3. Run 'gh run view <run-id> --log-failed' to get the failure logs
-4. If needed, run 'gh run view <run-id> --log' for full logs
-
-PHASE 2 - ANALYZE:
-5. Identify the root cause of the failure
-6. Understand what needs to be fixed (tests, lint, build, types, etc.)
-
-PHASE 3 - FIX:
-7. Make the necessary code changes to fix the CI errors
-8. Detect package manager (check for pnpm-lock.yaml, yarn.lock, or package-lock.json)
-9. Run the same checks locally to verify the fix (lint, test, build, typecheck)
-10. Make sure all checks pass before proceeding
-
-PHASE 4 - PUSH:
-11. Commit with a clear message like 'fix: resolve CI failures'
-12. Push to the branch (git push)
-
-IMPORTANT:
-- Focus ONLY on fixing the CI errors, don't refactor unrelated code
-- If multiple issues, fix them all
-- Verify locally before pushing"
 
       else
         # Build flags based on mode
@@ -215,76 +152,10 @@ IMPORTANT:
             ;;
         esac
         echo ""
-
-        # Build prompt based on type
-        case "$type" in
-          "pr-review")
-            prompt="You are reviewing Pull Request #$num.
-
-FIRST STEPS:
-1. Run 'gh pr view $num' to get PR title, description, and metadata
-2. Run 'gh pr diff $num' to see all code changes
-
-CODE REVIEW CHECKLIST:
-- Logic & Correctness: Does it work? Edge cases handled?
-- Security: Injection, auth issues, data exposure?
-- Performance: N+1 queries, memory leaks, blocking ops?
-- Error Handling: Proper error messages?
-- Code Quality: Readable, DRY, good abstractions?
-- Testing: Tests present and meaningful?
-- Breaking Changes: Could this break existing code?
-
-OUTPUT:
-- Summary of the PR
-- [OK] What looks good
-- [~] Concerns (with file:line references)
-- [!!] Blocking issues
-- [?] Optional improvements
-- Recommendation: Approve / Request Changes / Discuss"
-            ;;
-
-          "pr-work")
-            prompt="You are working on Pull Request #$num.
-
-FIRST STEPS:
-1. Run 'gh pr view $num' to understand the PR context
-2. Run 'gh pr diff $num' to see current changes
-
-You are now in the PR branch. Help the user with whatever they need:
-- Understanding the code
-- Making additional changes
-- Fixing issues
-- Responding to review comments
-
-Ask what they'd like to do."
-            ;;
-
-          "issue-work")
-            prompt="You are working on GitHub Issue #$num.
-
-FIRST STEPS:
-1. Run 'gh issue view $num' to read the full issue
-2. Identify the core problem or feature request
-3. Note requirements and acceptance criteria
-
-EXPLORATION:
-4. Explore the codebase structure
-5. Find related code and patterns
-6. Identify dependencies and impact areas
-
-PLANNING:
-7. Break down into clear steps
-8. Consider edge cases and testing
-
-OUTPUT:
-- Summary of the issue
-- Files to create/modify
-- Implementation approach
-- Questions if any"
-            ;;
-        esac
       fi
 
+      # Generate prompt dynamically (supports GitHub & GitLab)
+      prompt=$(wt-core --generate-prompt "$type" "$num")
       [[ -n "$prompt" ]] && claude $claude_flags "$prompt"
     fi
   fi
@@ -353,9 +224,14 @@ if [[ "$1" == "--setup" ]]; then
     deps_ok=false
   fi
   if command -v gh &>/dev/null; then
-    _msg "  [ok] gh"
+    _msg "  [ok] gh (GitHub CLI)"
   else
-    _msg "  [--] gh (optional) - install with: brew install gh"
+    _msg "  [--] gh (optional, GitHub) - install with: brew install gh"
+  fi
+  if command -v glab &>/dev/null; then
+    _msg "  [ok] glab (GitLab CLI)"
+  else
+    _msg "  [--] glab (optional, GitLab) - install with: brew install glab"
   fi
   if command -v jq &>/dev/null; then
     _msg "  [ok] jq"
@@ -454,15 +330,20 @@ Options:
 Keyboard shortcuts:
   Ctrl+E           Open in editor
   Ctrl+N           New worktree
-  Ctrl+P           List PRs
-  Ctrl+G           List issues (G = GitHub)
+  Ctrl+P           List PRs/MRs
+  Ctrl+G           List issues
   Ctrl+D           Delete worktree(s)
 
 Features:
-  - Create worktrees from branch, PR, or GitHub issue
+  - Create worktrees from branch, PR/MR, or issue
+  - GitHub (gh) and GitLab (glab) support with auto-detection
   - Multi-select delete with Space
   - Dirty indicator (*) for uncommitted changes
   - Claude Code integration (forced/ask/plan modes)
+
+Platform detection:
+  Auto-detected from git remote URL (gitlab.* -> GitLab, else GitHub).
+  Override with: WT_PLATFORM=github|gitlab
 
 Quick start:
   wt --setup       One-time installation
@@ -471,7 +352,7 @@ Quick start:
   wt -             Switch to previous worktree (like cd -)
   wt .             Switch to main worktree
 
-Dependencies: fzf (required), gh, jq, claude (optional)
+Dependencies: fzf (required), gh/glab, jq, claude (optional)
 EOF
   exit 0
 fi
@@ -556,6 +437,420 @@ msg_warn() {
   echo -e "${C_YELLOW}!${C_RESET} $*" >&2
 }
 
+# =============================================================================
+# Platform Detection (GitHub / GitLab)
+# =============================================================================
+
+_WT_PLATFORM=""
+
+detect_platform() {
+  if [[ -n "$_WT_PLATFORM" ]]; then
+    echo "$_WT_PLATFORM"
+    return
+  fi
+
+  # Override via environment variable
+  if [[ -n "${WT_PLATFORM:-}" ]]; then
+    case "$WT_PLATFORM" in
+      github|gitlab)
+        _WT_PLATFORM="$WT_PLATFORM"
+        echo "$_WT_PLATFORM"
+        return
+        ;;
+    esac
+  fi
+
+  # Auto-detect from remote URL
+  local remote_url
+  remote_url=$(git -C "$MAIN_REPO" remote get-url origin 2>/dev/null)
+
+  case "$remote_url" in
+    *gitlab*) _WT_PLATFORM="gitlab" ;;
+    *)        _WT_PLATFORM="github" ;;
+  esac
+
+  echo "$_WT_PLATFORM"
+}
+
+has_cli() {
+  local platform=$(detect_platform)
+  if [[ "$platform" == "gitlab" ]]; then
+    command -v glab &>/dev/null && glab auth status &>/dev/null
+  else
+    command -v gh &>/dev/null && gh auth status &>/dev/null
+  fi
+}
+
+get_cli_name() {
+  if [[ "$(detect_platform)" == "gitlab" ]]; then echo "glab"; else echo "gh"; fi
+}
+
+get_pr_term() {
+  if [[ "$(detect_platform)" == "gitlab" ]]; then echo "MR"; else echo "PR"; fi
+}
+
+get_pr_term_long() {
+  if [[ "$(detect_platform)" == "gitlab" ]]; then echo "Merge Request"; else echo "Pull Request"; fi
+}
+
+get_platform_name() {
+  if [[ "$(detect_platform)" == "gitlab" ]]; then echo "GitLab"; else echo "GitHub"; fi
+}
+
+# =============================================================================
+# CLI Abstraction (gh / glab)
+# =============================================================================
+
+cli_pr_list() {
+  local platform=$(detect_platform)
+  if [[ "$platform" == "gitlab" ]]; then
+    glab mr list --per-page 20 -F json 2>/dev/null | \
+      /usr/bin/jq -r '.[] |
+        (if .draft then "\u001b[2m[draft]\u001b[0m"
+         elif .head_pipeline == null then "\u001b[2m[--]\u001b[0m"
+         elif .head_pipeline.status == "failed" then "\u001b[31m[fail]\u001b[0m"
+         elif .head_pipeline.status == "success" then "\u001b[32m[ok]\u001b[0m"
+         else "\u001b[33m[..]\u001b[0m" end) as $ci |
+        "#\(.iid)\t\($ci)  \t\(.title[0:50])\t\u001b[2m@\(.author.username)\u001b[0m\t\(.source_branch)"'
+  else
+    gh pr list --json number,title,headRefName,author,reviewDecision,statusCheckRollup,isDraft 2>/dev/null | \
+      /usr/bin/jq -r '.[] |
+        (if .isDraft then "\u001b[2m[draft]\u001b[0m"
+         elif (.statusCheckRollup | length) == 0 then "\u001b[2m[--]\u001b[0m"
+         elif ([.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length) > 0 then "\u001b[31m[fail]\u001b[0m"
+         elif ([.statusCheckRollup[] | select(.status == "COMPLETED")] | length) < (.statusCheckRollup | length) then "\u001b[33m[..]\u001b[0m"
+         else "\u001b[32m[ok]\u001b[0m" end) as $ci |
+        (if .reviewDecision == "APPROVED" then "\u001b[32m✓\u001b[0m"
+         elif .reviewDecision == "CHANGES_REQUESTED" then "\u001b[31m✗\u001b[0m"
+         else " " end) as $review |
+        "#\(.number)\t\($ci) \($review)\t\(.title[0:50])\t\u001b[2m@\(.author.login)\u001b[0m\t\(.headRefName)"'
+  fi
+}
+
+cli_pr_view() {
+  local num="$1"
+  local platform=$(detect_platform)
+  if [[ "$platform" == "gitlab" ]]; then
+    glab mr view "$num" -F json 2>/dev/null | \
+      /usr/bin/jq -r '"Title: \(.title)\n\nStats: \(.changes_count // "?") changed files\n\nLabels: \(if (.labels | length) > 0 then (.labels | join(", ")) else "none" end)\n\nState: \(.state)\n\n" + (if .description then "Description:\n\(.description[0:500])" else "" end)'
+  else
+    gh pr view "$num" --json title,body,labels,reviewDecision,additions,deletions,changedFiles 2>/dev/null | \
+      /usr/bin/jq -r '"Title: \(.title)\n\nStats: +\(.additions) -\(.deletions) (\(.changedFiles) files)\n\nLabels: \(if (.labels | length) > 0 then (.labels | map(.name) | join(", ")) else "none" end)\n\nReview: \(.reviewDecision // "Pending")\n\n" + (if .body then "Description:\n\(.body[0:500])" else "" end)'
+  fi
+}
+
+cli_pr_diff_stat() {
+  local num="$1"
+  local platform=$(detect_platform)
+  if [[ "$platform" == "gitlab" ]]; then
+    local mr_json
+    mr_json=$(glab mr view "$num" -F json 2>/dev/null)
+    local target_branch source_branch
+    target_branch=$(echo "$mr_json" | /usr/bin/jq -r '.target_branch')
+    source_branch=$(echo "$mr_json" | /usr/bin/jq -r '.source_branch')
+    if [[ -n "$target_branch" && -n "$source_branch" ]]; then
+      git diff --stat "origin/$target_branch...origin/$source_branch" 2>/dev/null | /usr/bin/head -20
+    fi
+  else
+    gh pr diff "$num" --stat 2>/dev/null | /usr/bin/head -20
+  fi
+}
+
+cli_issue_list() {
+  local platform=$(detect_platform)
+  if [[ "$platform" == "gitlab" ]]; then
+    glab issue list --per-page 20 -F json 2>/dev/null | \
+      /usr/bin/jq -r '.[] |
+        (if (.labels | length) > 0 then (.labels | join(","))[0:15] else "-" end) as $labels |
+        "#\(.iid)\t\(.title[0:50])\t@\(.author.username)\t\($labels)"'
+  else
+    gh issue list --limit 20 --json number,title,author,labels,state 2>/dev/null | \
+      /usr/bin/jq -r '.[] |
+        (if (.labels | length) > 0 then (.labels | map(.name) | join(","))[0:15] else "-" end) as $labels |
+        "#\(.number)\t\(.title[0:50])\t@\(.author.login)\t\($labels)"'
+  fi
+}
+
+cli_issue_view() {
+  local num="$1"
+  local platform=$(detect_platform)
+  if [[ "$platform" == "gitlab" ]]; then
+    glab issue view "$num" -F json 2>/dev/null | \
+      /usr/bin/jq -r '"Title: \(.title)\n\nState: \(.state)\n\nLabels: \(if (.labels | length) > 0 then (.labels | join(", ")) else "none" end)\n\nComments: \(.user_notes_count)\n\n" + (if .description then "Description:\n\(.description[0:800])" else "No description" end)'
+  else
+    gh issue view "$num" --json title,body,labels,state,comments 2>/dev/null | \
+      /usr/bin/jq -r '"Title: \(.title)\n\nState: \(.state)\n\nLabels: \(if (.labels | length) > 0 then (.labels | map(.name) | join(", ")) else "none" end)\n\nComments: \(.comments | length)\n\n" + (if .body then "Description:\n\(.body[0:800])" else "No description" end)'
+  fi
+}
+
+cli_open_pr_in_browser() {
+  local num="$1"
+  local platform=$(detect_platform)
+  if [[ "$platform" == "gitlab" ]]; then
+    glab mr view "$num" --web >/dev/null 2>&1
+  else
+    gh pr view "$num" --web >/dev/null 2>&1
+  fi
+}
+
+cli_open_issue_in_browser() {
+  local num="$1"
+  local platform=$(detect_platform)
+  if [[ "$platform" == "gitlab" ]]; then
+    glab issue view "$num" --web >/dev/null 2>&1
+  else
+    gh issue view "$num" --web >/dev/null 2>&1
+  fi
+}
+
+cli_pr_status() {
+  local branch="$1"
+  local platform=$(detect_platform)
+  local pr_term=$(get_pr_term)
+  local pr_prefix; if [[ "$platform" == "gitlab" ]]; then pr_prefix="!"; else pr_prefix="#"; fi
+
+  if [[ "$platform" == "gitlab" ]]; then
+    if ! command -v glab &>/dev/null; then return; fi
+    local mr_info
+    mr_info=$(glab mr list --source-branch "$branch" -F json 2>/dev/null | /usr/bin/jq '.[0] // empty')
+    if [[ -n "$mr_info" ]]; then
+      local mr_state mr_number mr_title
+      mr_state=$(echo "$mr_info" | /usr/bin/jq -r '.state')
+      mr_number=$(echo "$mr_info" | /usr/bin/jq -r '.iid')
+      mr_title=$(echo "$mr_info" | /usr/bin/jq -r '.title[0:50]')
+      printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+      case "$mr_state" in
+        "merged")  printf '  \033[32m✓ %s %s%s MERGED\033[0m\n' "$pr_term" "$pr_prefix" "$mr_number" ;;
+        "closed")  printf '  \033[31m✗ %s %s%s CLOSED\033[0m\n' "$pr_term" "$pr_prefix" "$mr_number" ;;
+        *)         printf '  \033[34m○ %s %s%s OPEN\033[0m\n' "$pr_term" "$pr_prefix" "$mr_number" ;;
+      esac
+      printf '  %s\n' "$mr_title"
+    fi
+  else
+    if ! command -v gh &>/dev/null; then return; fi
+    local pr_info
+    pr_info=$(gh pr view "$branch" --json state,number,title 2>/dev/null)
+    if [[ -n "$pr_info" ]]; then
+      local pr_state pr_number pr_title
+      pr_state=$(echo "$pr_info" | /usr/bin/jq -r '.state')
+      pr_number=$(echo "$pr_info" | /usr/bin/jq -r '.number')
+      pr_title=$(echo "$pr_info" | /usr/bin/jq -r '.title[0:50]')
+      printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+      case "$pr_state" in
+        "MERGED")  printf '  \033[32m✓ %s #%s MERGED\033[0m\n' "$pr_term" "$pr_number" ;;
+        "CLOSED")  printf '  \033[31m✗ %s #%s CLOSED\033[0m\n' "$pr_term" "$pr_number" ;;
+        *)         printf '  \033[34m○ %s #%s OPEN\033[0m\n' "$pr_term" "$pr_number" ;;
+      esac
+      printf '  %s\n' "$pr_title"
+    fi
+  fi
+}
+
+# CLI command helpers for Claude prompts
+cli_cmd_issue_view() {
+  if [[ "$(detect_platform)" == "gitlab" ]]; then echo "glab issue view $1"; else echo "gh issue view $1"; fi
+}
+cli_cmd_pr_create() {
+  if [[ "$(detect_platform)" == "gitlab" ]]; then echo "glab mr create"; else echo "gh pr create"; fi
+}
+cli_cmd_pr_view() {
+  if [[ "$(detect_platform)" == "gitlab" ]]; then echo "glab mr view $1"; else echo "gh pr view $1"; fi
+}
+cli_cmd_pr_diff() {
+  if [[ "$(detect_platform)" == "gitlab" ]]; then echo "glab mr diff $1"; else echo "gh pr diff $1"; fi
+}
+
+# =============================================================================
+# Prompt Generation for Claude
+# =============================================================================
+
+generate_prompt() {
+  local type="$1"
+  local num="$2"
+  local platform=$(detect_platform)
+  local pr_term=$(get_pr_term)
+  local pr_term_long=$(get_pr_term_long)
+  local platform_name=$(get_platform_name)
+  local pr_prefix; if [[ "$platform" == "gitlab" ]]; then pr_prefix="!"; else pr_prefix="#"; fi
+
+  case "$type" in
+    "issue-auto")
+      cat <<PROMPT
+You are auto-resolving $platform_name Issue #$num.
+
+MISSION: Fully resolve this issue autonomously and create a $pr_term_long.
+
+PHASE 1 - UNDERSTAND:
+1. Run '$(cli_cmd_issue_view "$num")' to read the issue details
+2. Identify exactly what needs to be done
+3. Note acceptance criteria and constraints
+
+PHASE 2 - EXPLORE:
+4. Explore the codebase to understand the architecture
+5. Find relevant files and patterns
+6. Identify what needs to change
+
+PHASE 3 - IMPLEMENT:
+7. Make the necessary code changes
+8. Follow existing code patterns and conventions
+9. Handle edge cases and errors appropriately
+10. Add tests if the project has them
+
+PHASE 4 - VERIFY:
+11. Detect the package manager (check for pnpm-lock.yaml, yarn.lock, or package-lock.json)
+12. Run the project's test/build commands if available (pnpm/yarn/npm test, build, etc.)
+13. Fix any errors before proceeding - do not push broken code
+
+PHASE 5 - DELIVER:
+14. Commit your changes with a clear message referencing #$num
+15. Push the branch
+16. Create a $pr_term with '$(cli_cmd_pr_create)' that:
+    - References the issue (Closes #$num)
+    - Describes what was changed and why
+    - Lists any considerations or trade-offs
+
+Be thorough but efficient. Ship working code.
+PROMPT
+      ;;
+
+    "ci-fix")
+      if [[ "$platform" == "gitlab" ]]; then
+        cat <<PROMPT
+You are fixing CI failures for $pr_term_long $pr_prefix$num.
+
+MISSION: Analyze the CI failure logs, fix the issues, and push the fix.
+
+PHASE 1 - GET CI LOGS:
+1. Run 'glab ci list' to find recent pipelines
+2. Run 'glab ci view' to see failed jobs and their logs
+3. Identify which jobs failed and read their output
+
+PHASE 2 - ANALYZE:
+4. Identify the root cause of the failure
+5. Understand what needs to be fixed (tests, lint, build, types, etc.)
+
+PHASE 3 - FIX:
+6. Make the necessary code changes to fix the CI errors
+7. Detect package manager (check for pnpm-lock.yaml, yarn.lock, or package-lock.json)
+8. Run the same checks locally to verify the fix (lint, test, build, typecheck)
+9. Make sure all checks pass before proceeding
+
+PHASE 4 - PUSH:
+10. Commit with a clear message like 'fix: resolve CI failures'
+11. Push to the branch (git push)
+
+IMPORTANT:
+- Focus ONLY on fixing the CI errors, don't refactor unrelated code
+- If multiple issues, fix them all
+- Verify locally before pushing
+PROMPT
+      else
+        cat <<PROMPT
+You are fixing CI failures for $pr_term_long #$num.
+
+MISSION: Analyze the CI failure logs, fix the issues, and push the fix.
+
+PHASE 1 - GET CI LOGS:
+1. Run 'gh run list --branch \$(git branch --show-current) --limit 5' to find recent workflow runs
+2. Find the failed run ID
+3. Run 'gh run view <run-id> --log-failed' to get the failure logs
+4. If needed, run 'gh run view <run-id> --log' for full logs
+
+PHASE 2 - ANALYZE:
+5. Identify the root cause of the failure
+6. Understand what needs to be fixed (tests, lint, build, types, etc.)
+
+PHASE 3 - FIX:
+7. Make the necessary code changes to fix the CI errors
+8. Detect package manager (check for pnpm-lock.yaml, yarn.lock, or package-lock.json)
+9. Run the same checks locally to verify the fix (lint, test, build, typecheck)
+10. Make sure all checks pass before proceeding
+
+PHASE 4 - PUSH:
+11. Commit with a clear message like 'fix: resolve CI failures'
+12. Push to the branch (git push)
+
+IMPORTANT:
+- Focus ONLY on fixing the CI errors, don't refactor unrelated code
+- If multiple issues, fix them all
+- Verify locally before pushing
+PROMPT
+      fi
+      ;;
+
+    "pr-review")
+      cat <<PROMPT
+You are reviewing $pr_term_long $pr_prefix$num.
+
+FIRST STEPS:
+1. Run '$(cli_cmd_pr_view "$num")' to get $pr_term title, description, and metadata
+2. Run '$(cli_cmd_pr_diff "$num")' to see all code changes
+
+CODE REVIEW CHECKLIST:
+- Logic & Correctness: Does it work? Edge cases handled?
+- Security: Injection, auth issues, data exposure?
+- Performance: N+1 queries, memory leaks, blocking ops?
+- Error Handling: Proper error messages?
+- Code Quality: Readable, DRY, good abstractions?
+- Testing: Tests present and meaningful?
+- Breaking Changes: Could this break existing code?
+
+OUTPUT:
+- Summary of the $pr_term
+- [OK] What looks good
+- [~] Concerns (with file:line references)
+- [!!] Blocking issues
+- [?] Optional improvements
+- Recommendation: Approve / Request Changes / Discuss
+PROMPT
+      ;;
+
+    "pr-work")
+      cat <<PROMPT
+You are working on $pr_term_long $pr_prefix$num.
+
+FIRST STEPS:
+1. Run '$(cli_cmd_pr_view "$num")' to understand the $pr_term context
+2. Run '$(cli_cmd_pr_diff "$num")' to see current changes
+
+You are now in the $pr_term branch. Help the user with whatever they need:
+- Understanding the code
+- Making additional changes
+- Fixing issues
+- Responding to review comments
+
+Ask what they'd like to do.
+PROMPT
+      ;;
+
+    "issue-work")
+      cat <<PROMPT
+You are working on $platform_name Issue #$num.
+
+FIRST STEPS:
+1. Run '$(cli_cmd_issue_view "$num")' to read the full issue
+2. Identify the core problem or feature request
+3. Note requirements and acceptance criteria
+
+EXPLORATION:
+4. Explore the codebase structure
+5. Find related code and patterns
+6. Identify dependencies and impact areas
+
+PLANNING:
+7. Break down into clear steps
+8. Consider edge cases and testing
+
+OUTPUT:
+- Summary of the issue
+- Files to create/modify
+- Implementation approach
+- Questions if any
+PROMPT
+      ;;
+  esac
+}
+
 # Loading bar animation
 # Usage: loader_start "message" ; do_stuff ; loader_stop
 LOADER_PID=""
@@ -627,37 +922,53 @@ EOF
 }
 
 # =============================================================================
-# GitHub Auth Setup
+# CLI Auth Setup
 # =============================================================================
 
-setup_github_auth() {
-  if has_gh; then
+setup_cli_auth() {
+  if has_cli; then
     return 0  # Déjà authentifié
   fi
 
-  if ! command -v gh &> /dev/null; then
-    msg "GitHub CLI (gh) is not installed"
-    msg "PR features will be disabled"
-    msg "Install with: brew install gh"
+  local platform=$(detect_platform)
+  local cli_name=$(get_cli_name)
+  local platform_name=$(get_platform_name)
+
+  if ! command -v "$cli_name" &>/dev/null; then
+    msg "$platform_name CLI ($cli_name) is not installed"
+    msg "$(get_pr_term) features will be disabled"
+    if [[ "$platform" == "gitlab" ]]; then
+      msg "Install with: brew install glab"
+    else
+      msg "Install with: brew install gh"
+    fi
     return 1
   fi
 
   local choice=$(printf "%s\n" \
     "Login via browser (recommended)" \
     "Login with a token" \
-    "Continue without GitHub" \
+    "Continue without $platform_name" \
     "Quit" | \
     fzf --height=40% \
         --layout=reverse \
         --border \
-        --header="GitHub CLI is not configured")
+        --header="$platform_name CLI is not configured")
 
   case "$choice" in
     *"browser"*)
-      gh auth login --web </dev/tty
+      if [[ "$platform" == "gitlab" ]]; then
+        glab auth login --web </dev/tty
+      else
+        gh auth login --web </dev/tty
+      fi
       ;;
     *"token"*)
-      gh auth login </dev/tty
+      if [[ "$platform" == "gitlab" ]]; then
+        glab auth login </dev/tty
+      else
+        gh auth login </dev/tty
+      fi
       ;;
     *"Continue"*)
       return 1  # Continue sans auth
@@ -740,42 +1051,30 @@ format_all_worktrees() {
 }
 
 # =============================================================================
-# PRs
+# PRs / MRs
 # =============================================================================
 
 get_formatted_prs() {
-  if ! has_gh; then
-    msg "gh not installed or not authenticated"
+  if ! has_cli; then
+    msg "$(get_cli_name) not installed or not authenticated"
     return 1
   fi
-
-  gh pr list --json number,title,headRefName,author,reviewDecision,statusCheckRollup,isDraft 2>/dev/null | \
-    /usr/bin/jq -r '.[] |
-      (if .isDraft then "\u001b[2m[draft]\u001b[0m"
-       elif (.statusCheckRollup | length) == 0 then "\u001b[2m[--]\u001b[0m"
-       elif ([.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length) > 0 then "\u001b[31m[fail]\u001b[0m"
-       elif ([.statusCheckRollup[] | select(.status == "COMPLETED")] | length) < (.statusCheckRollup | length) then "\u001b[33m[..]\u001b[0m"
-       else "\u001b[32m[ok]\u001b[0m" end) as $ci |
-      (if .reviewDecision == "APPROVED" then "\u001b[32m✓\u001b[0m"
-       elif .reviewDecision == "CHANGES_REQUESTED" then "\u001b[31m✗\u001b[0m"
-       else " " end) as $review |
-      "#\(.number)\t\($ci) \($review)\t\(.title[0:50])\t\u001b[2m@\(.author.login)\u001b[0m\t\(.headRefName)"'
+  cli_pr_list
 }
 
 pr_preview() {
   local pr_num="$1"
   if [[ -z "$pr_num" ]]; then
-    echo "Select a PR"
+    echo "Select a $(get_pr_term)"
     return
   fi
 
   echo "================================================"
-  gh pr view "$pr_num" --json title,body,labels,reviewDecision,additions,deletions,changedFiles 2>/dev/null | \
-    /usr/bin/jq -r '"Title: \(.title)\n\nStats: +\(.additions) -\(.deletions) (\(.changedFiles) files)\n\nLabels: \(if (.labels | length) > 0 then (.labels | map(.name) | join(", ")) else "none" end)\n\nReview: \(.reviewDecision // "Pending")\n\n" + (if .body then "Description:\n\(.body[0:500])" else "" end)'
+  cli_pr_view "$pr_num"
   echo ""
   echo "================================================"
   echo "Changed files:"
-  gh pr diff "$pr_num" --stat 2>/dev/null | /usr/bin/head -20
+  cli_pr_diff_stat "$pr_num"
 }
 
 # =============================================================================
@@ -783,15 +1082,11 @@ pr_preview() {
 # =============================================================================
 
 get_formatted_issues() {
-  if ! has_gh; then
-    msg "gh not installed or not authenticated"
+  if ! has_cli; then
+    msg "$(get_cli_name) not installed or not authenticated"
     return 1
   fi
-
-  gh issue list --limit 20 --json number,title,author,labels,state 2>/dev/null | \
-    /usr/bin/jq -r '.[] |
-      (if (.labels | length) > 0 then (.labels | map(.name) | join(","))[0:15] else "-" end) as $labels |
-      "#\(.number)\t\(.title[0:50])\t@\(.author.login)\t\($labels)"'
+  cli_issue_list
 }
 
 issue_preview() {
@@ -802,8 +1097,7 @@ issue_preview() {
   fi
 
   echo "================================================"
-  gh issue view "$issue_num" --json title,body,labels,state,comments 2>/dev/null | \
-    /usr/bin/jq -r '"Title: \(.title)\n\nState: \(.state)\n\nLabels: \(if (.labels | length) > 0 then (.labels | map(.name) | join(", ")) else "none" end)\n\nComments: \(.comments | length)\n\n" + (if .body then "Description:\n\(.body[0:800])" else "No description" end)'
+  cli_issue_view "$issue_num"
   echo ""
   echo "================================================"
 }
@@ -1069,7 +1363,7 @@ create_from_pr() {
   fi
 }
 
-# Créer un worktree depuis une issue GitHub
+# Créer un worktree depuis une issue
 create_from_issue() {
   local issue_num="$1"
   local issue_title="$2"
@@ -1115,8 +1409,10 @@ create_from_issue() {
 select_pr_action() {
   local pr_num="$1"
   local ci_failed="$2"
+  local pr_term=$(get_pr_term)
+  local platform_name=$(get_platform_name)
 
-  local options="Review this PR
+  local options="Review this $pr_term
 Launch Claude
 Just create worktree"
 
@@ -1128,7 +1424,7 @@ $options"
     shortcuts="^F fix CI · $shortcuts"
   fi
 
-  local header="${C_BOLD}PR #$pr_num${C_RESET}  ${C_DIM}$shortcuts${C_RESET}"
+  local header="${C_BOLD}$pr_term #$pr_num${C_RESET}  ${C_DIM}$shortcuts${C_RESET}"
 
   local result
   result=$(fzf --height=30% \
@@ -1143,7 +1439,7 @@ $options"
               echo 'AUTO-FIX CI FAILURES'
               echo ''
               echo 'Claude will automatically:'
-              echo '  1. Fetch failed CI logs from GitHub'
+              echo '  1. Fetch failed CI logs'
               echo '  2. Analyze the errors'
               echo '  3. Fix the code'
               echo '  4. Push the fix'
@@ -1153,14 +1449,14 @@ $options"
             *Review*)
               echo 'Code review mode'
               echo ''
-              echo 'Claude will analyze the PR for:'
+              echo 'Claude will analyze the $pr_term for:'
               echo '  - Bugs and logic errors'
               echo '  - Security issues'
               echo '  - Performance problems'
               echo '  - Code quality'
               ;;
             *Launch*)
-              echo 'Work on this PR'
+              echo 'Work on this $pr_term'
               echo ''
               echo 'Claude will help you:'
               echo '  - Understand the changes'
@@ -1171,7 +1467,7 @@ $options"
               echo 'Create worktree only'
               echo ''
               echo 'No Claude integration.'
-              echo 'Just checkout the PR branch.'
+              echo 'Just checkout the $pr_term branch.'
               ;;
           esac
         " \
@@ -1183,7 +1479,7 @@ $options"
   # Handle shortcuts
   case "$key" in
     ctrl-f) action="Fix CI issues (auto)" ;;
-    ctrl-r) action="Review this PR" ;;
+    ctrl-r) action="Review this $pr_term" ;;
     ctrl-l) action="Launch Claude" ;;
     ctrl-w) action="Just create worktree" ;;
   esac
@@ -1192,26 +1488,27 @@ $options"
 }
 
 menu_review_pr() {
-  if ! has_gh; then
-    setup_github_auth
-    if ! has_gh; then
+  if ! has_cli; then
+    setup_cli_auth
+    if ! has_cli; then
       return 1
     fi
   fi
 
-  loader_start "Fetching PRs..."
+  local pr_term=$(get_pr_term)
+  loader_start "Fetching ${pr_term}s..."
   local prs=$(get_formatted_prs)
   loader_stop
   if [[ -z "$prs" ]]; then
     msg ""
-    msg "No open PRs found."
+    msg "No open ${pr_term}s found."
     msg "Press Enter to continue..."
     read -r </dev/tty
     return 1
   fi
 
   # Boucle pour permettre Ctrl+O sans quitter
-  local header="${C_BOLD}Open PRs${C_RESET}  ${C_DIM}Enter select · ^O browser${C_RESET}"
+  local header="${C_BOLD}Open ${pr_term}s${C_RESET}  ${C_DIM}Enter select · ^O browser${C_RESET}"
   while true; do
     local result=$(echo -e "$prs" | \
       fzf --height=70% \
@@ -1241,7 +1538,7 @@ menu_review_pr() {
     fi
 
     if [[ "$key" == "ctrl-o" ]]; then
-      gh pr view "$pr_num" --web >/dev/null 2>&1
+      cli_open_pr_in_browser "$pr_num"
     else
       # Select action (pass CI status)
       local action=$(select_pr_action "$pr_num" "$ci_failed")
@@ -1318,7 +1615,7 @@ Just create worktree"
               echo '  2. Explore the codebase'
               echo '  3. Plan the implementation'
               echo '  4. Write the code'
-              echo '  5. Create a PR'
+              echo '  5. Create a $(get_pr_term)'
               echo ''
               echo '!! No human intervention required'
               ;;
@@ -1356,9 +1653,9 @@ Just create worktree"
 }
 
 menu_from_issue() {
-  if ! has_gh; then
-    setup_github_auth
-    if ! has_gh; then
+  if ! has_cli; then
+    setup_cli_auth
+    if ! has_cli; then
       return 1
     fi
   fi
@@ -1400,7 +1697,7 @@ menu_from_issue() {
     local issue_title=$(echo "$selected" | cut -f2)
 
     if [[ "$key" == "ctrl-o" ]]; then
-      gh issue view "$issue_num" --web >/dev/null 2>&1
+      cli_open_issue_in_browser "$issue_num"
     else
       # Select action
       local action=$(select_issue_action "$issue_num")
@@ -1445,14 +1742,16 @@ menu_from_issue() {
 
 menu_create_worktree() {
   while true; do
-    local header="${C_BOLD}Create a worktree${C_RESET}  ${C_DIM}^N new · ^B branch · ^C current · ^I issue · ^P pr${C_RESET}"
+    local pr_term=$(get_pr_term)
+    local pr_term_lower=$(echo "$pr_term" | tr '[:upper:]' '[:lower:]')
+    local header="${C_BOLD}Create a worktree${C_RESET}  ${C_DIM}^N new · ^B branch · ^C current · ^I issue · ^P $pr_term_lower${C_RESET}"
 
     local result=$(printf "%s\n" \
       "New branch" \
       "From existing branch" \
       "From current (quick copy)" \
       "From an issue" \
-      "Review a PR" \
+      "Review a $pr_term" \
       "Back" | \
       fzf --height=40% \
           --layout=reverse \
@@ -1514,7 +1813,7 @@ menu_create_worktree() {
         fi
         return $ret
         ;;
-      *"PR"*)
+      *"PR"*|*"MR"*)
         local output
         output=$(menu_review_pr)
         local ret=$?
@@ -2342,23 +2641,9 @@ action_delete_worktrees() {
             /usr/bin/git -C \"\$path\" log --oneline -5 2>/dev/null
             echo ''
 
-            # PR status (at the end)
-            if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]] && command -v gh &>/dev/null; then
-              pr_info=\$(gh pr view \"\$branch\" --json state,number,title 2>/dev/null)
-              if [[ -n \"\$pr_info\" ]]; then
-                pr_state=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.state')
-                pr_number=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.number')
-                pr_title=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.title[0:40]')
-                printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-                if [[ \"\$pr_state\" == \"MERGED\" ]]; then
-                  printf '  \033[32m✓ PR #%s MERGED\033[0m\n' \"\$pr_number\"
-                elif [[ \"\$pr_state\" == \"CLOSED\" ]]; then
-                  printf '  \033[31m✗ PR #%s CLOSED\033[0m\n' \"\$pr_number\"
-                else
-                  printf '  \033[34m○ PR #%s OPEN\033[0m\n' \"\$pr_number\"
-                fi
-                printf '  %s\n' \"\$pr_title\"
-              fi
+            # PR/MR status (at the end)
+            if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]]; then
+              bash \"$SCRIPT_PATH\" --pr-status-preview \"\$branch\"
             fi
           fi
         " \
@@ -2466,7 +2751,8 @@ main_menu() {
     local menu="${worktrees_formatted}${actions}"
 
     # Header avec raccourcis clavier
-    local header="${C_BOLD}$REPO_NAME${C_RESET}  ${C_DIM}^E editor · ^N new · ^P PRs · ^G issues · ^D delete${C_RESET}"
+    local pr_term=$(get_pr_term)
+    local header="${C_BOLD}$REPO_NAME${C_RESET}  ${C_DIM}^E editor · ^N new · ^P ${pr_term}s · ^G issues · ^D delete${C_RESET}"
 
     local result=$(echo "$menu" | \
       fzf --height=70% \
@@ -2496,8 +2782,8 @@ main_menu() {
               echo '  - New branch'
               echo '  - From existing branch'
               echo '  - From current (quick copy)'
-              echo '  - From GitHub issue'
-              echo '  - From GitHub PR'
+              echo '  - From issue'
+              echo '  - From $pr_term'
               echo ''
               echo 'Tip: ^N for quick access'
             elif [[ \"\$clean_line\" == \"Delete\"* ]]; then
@@ -2571,23 +2857,9 @@ main_menu() {
                 /usr/bin/git -C \"\$path\" log --oneline --graph --color=always -8 2>/dev/null
                 echo ''
 
-                # PR status (at the end, can be slow)
-                if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]] && command -v gh &>/dev/null; then
-                  pr_info=\$(gh pr view \"\$branch\" --json state,number,title 2>/dev/null)
-                  if [[ -n \"\$pr_info\" ]]; then
-                    pr_state=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.state')
-                    pr_number=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.number')
-                    pr_title=\$(echo \"\$pr_info\" | /usr/bin/jq -r '.title[0:50]')
-                    printf '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
-                    if [[ \"\$pr_state\" == \"MERGED\" ]]; then
-                      printf '  \033[32m✓ PR #%s MERGED\033[0m\n' \"\$pr_number\"
-                    elif [[ \"\$pr_state\" == \"CLOSED\" ]]; then
-                      printf '  \033[31m✗ PR #%s CLOSED\033[0m\n' \"\$pr_number\"
-                    else
-                      printf '  \033[34m○ PR #%s OPEN\033[0m\n' \"\$pr_number\"
-                    fi
-                    printf '  %s\n' \"\$pr_title\"
-                  fi
+                # PR/MR status (at the end, can be slow)
+                if [[ \"\$branch\" != \"\$default_branch\" && \"\$branch\" != \"detached\" ]]; then
+                  bash \"$SCRIPT_PATH\" --pr-status-preview \"\$branch\"
                 fi
               else
                 echo 'Invalid path'
@@ -2715,6 +2987,26 @@ fi
 
 if [[ "$1" == "--issue-preview" ]]; then
   issue_preview "$2"
+  exit 0
+fi
+
+if [[ "$1" == "--pr-status-preview" ]]; then
+  cli_pr_status "$2"
+  exit 0
+fi
+
+if [[ "$1" == "--generate-prompt" ]]; then
+  generate_prompt "$2" "$3"
+  exit 0
+fi
+
+if [[ "$1" == "--get-pr-term" ]]; then
+  get_pr_term
+  exit 0
+fi
+
+if [[ "$1" == "--get-platform-name" ]]; then
+  get_platform_name
   exit 0
 fi
 
