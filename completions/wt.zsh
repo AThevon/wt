@@ -24,18 +24,51 @@ function wt() {
     echo "Navigated to: $target"
 
     # Launch claude if marker present
-    if [[ "$claude_cmd" == CLAUDE:issue:* ]]; then
-      local issue_num="${claude_cmd#CLAUDE:issue:}"
-      echo ""
-      echo "Starting Claude Code for Issue #$issue_num planning..."
-      echo ""
-      claude "Read issue #$issue_num with 'gh issue view $issue_num', then explore the codebase and propose an implementation plan."
-    elif [[ "$claude_cmd" == CLAUDE:pr:* ]]; then
-      local pr_num="${claude_cmd#CLAUDE:pr:}"
-      echo ""
-      echo "Starting Claude Code for PR #$pr_num review..."
-      echo ""
-      claude "Review PR #$pr_num. Run 'gh pr view $pr_num' and 'gh pr diff $pr_num' to get context, then analyze the code changes for bugs, security issues, and best practices."
+    if [[ -n "$claude_cmd" ]]; then
+      local type=$(echo "$claude_cmd" | cut -d: -f2)
+      local num=$(echo "$claude_cmd" | cut -d: -f3)
+      local mode=$(echo "$claude_cmd" | cut -d: -f4)
+
+      local claude_flags=""
+      local pr_term=$(wt-core --get-pr-term 2>/dev/null || echo "PR")
+
+      if [[ "$type" == "issue-auto" || "$type" == "ci-fix" ]]; then
+        claude_flags="--dangerously-skip-permissions"
+        if [[ "$type" == "issue-auto" ]]; then
+          echo ""
+          echo ">> AUTO-RESOLVE: Issue #$num"
+          echo "   Claude will plan, implement, and create a $pr_term automatically."
+          echo ""
+        else
+          echo ""
+          echo ">> AUTO-FIX CI: $pr_term #$num"
+          echo "   Claude will fetch CI logs, fix the issues, and push."
+          echo ""
+        fi
+      else
+        case "$mode" in
+          forced)
+            claude_flags="--dangerously-skip-permissions"
+            echo ""
+            echo ">> Starting Claude in FORCED mode..."
+            ;;
+          ask)
+            claude_flags=""
+            echo ""
+            echo "?> Starting Claude in ASK mode..."
+            ;;
+          plan)
+            claude_flags="--permission-mode=plan"
+            echo ""
+            echo "## Starting Claude in PLAN mode..."
+            ;;
+        esac
+        echo ""
+      fi
+
+      # Generate prompt dynamically (supports GitHub & GitLab)
+      local prompt=$(wt-core --generate-prompt "$type" "$num")
+      [[ -n "$prompt" ]] && claude $claude_flags "$prompt"
     fi
   fi
 }
