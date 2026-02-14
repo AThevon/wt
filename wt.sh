@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.7.0"
+VERSION="1.7.1"
 
 # =============================================================================
 # Options de ligne de commande
@@ -2553,6 +2553,7 @@ Back"
         ;;
       "Show"*)
         less <(git stash show -p "$stash_ref") </dev/tty
+        continue
         ;;
       "Rename"*)
         msg "Enter new stash message:"
