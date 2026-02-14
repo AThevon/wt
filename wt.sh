@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.6.0"
+VERSION="1.7.0"
 
 # =============================================================================
 # Options de ligne de commande
