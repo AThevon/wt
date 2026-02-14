@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.7.1"
+VERSION="1.7.2"
 
 # =============================================================================
 # Options de ligne de commande
@@ -504,7 +504,7 @@ get_platform_name() {
 cli_pr_list() {
   local platform=$(detect_platform)
   if [[ "$platform" == "gitlab" ]]; then
-    glab mr list --per-page 20 -F json 2>/dev/null | \
+    glab mr list --per-page 20 --output json 2>/dev/null | \
       /usr/bin/jq -r '.[] |
         (if .draft then "\u001b[2m[draft]\u001b[0m"
          elif .head_pipeline == null then "\u001b[2m[--]\u001b[0m"
@@ -531,7 +531,7 @@ cli_pr_view() {
   local num="$1"
   local platform=$(detect_platform)
   if [[ "$platform" == "gitlab" ]]; then
-    glab mr view "$num" -F json 2>/dev/null | \
+    glab mr view "$num" --output json 2>/dev/null | \
       /usr/bin/jq -r '"Title: \(.title)\n\nStats: \(.changes_count // "?") changed files\n\nLabels: \(if (.labels | length) > 0 then (.labels | join(", ")) else "none" end)\n\nState: \(.state)\n\n" + (if .description then "Description:\n\(.description[0:500])" else "" end)'
   else
     gh pr view "$num" --json title,body,labels,reviewDecision,additions,deletions,changedFiles 2>/dev/null | \
@@ -544,7 +544,7 @@ cli_pr_diff_stat() {
   local platform=$(detect_platform)
   if [[ "$platform" == "gitlab" ]]; then
     local mr_json
-    mr_json=$(glab mr view "$num" -F json 2>/dev/null)
+    mr_json=$(glab mr view "$num" --output json 2>/dev/null)
     local target_branch source_branch
     target_branch=$(echo "$mr_json" | /usr/bin/jq -r '.target_branch')
     source_branch=$(echo "$mr_json" | /usr/bin/jq -r '.source_branch')
@@ -559,7 +559,7 @@ cli_pr_diff_stat() {
 cli_issue_list() {
   local platform=$(detect_platform)
   if [[ "$platform" == "gitlab" ]]; then
-    glab issue list --per-page 20 -F json 2>/dev/null | \
+    glab issue list --per-page 20 --output json 2>/dev/null | \
       /usr/bin/jq -r '.[] |
         (if (.labels | length) > 0 then (.labels | join(","))[0:15] else "-" end) as $labels |
         "#\(.iid)\t\(.title[0:50])\t@\(.author.username)\t\($labels)"'
@@ -575,7 +575,7 @@ cli_issue_view() {
   local num="$1"
   local platform=$(detect_platform)
   if [[ "$platform" == "gitlab" ]]; then
-    glab issue view "$num" -F json 2>/dev/null | \
+    glab issue view "$num" --output json 2>/dev/null | \
       /usr/bin/jq -r '"Title: \(.title)\n\nState: \(.state)\n\nLabels: \(if (.labels | length) > 0 then (.labels | join(", ")) else "none" end)\n\nComments: \(.user_notes_count)\n\n" + (if .description then "Description:\n\(.description[0:800])" else "No description" end)'
   else
     gh issue view "$num" --json title,body,labels,state,comments 2>/dev/null | \
@@ -612,7 +612,7 @@ cli_pr_status() {
   if [[ "$platform" == "gitlab" ]]; then
     if ! command -v glab &>/dev/null; then return; fi
     local mr_info
-    mr_info=$(glab mr list --source-branch "$branch" -F json 2>/dev/null | /usr/bin/jq '.[0] // empty')
+    mr_info=$(glab mr list --source-branch "$branch" --output json 2>/dev/null | /usr/bin/jq '.[0] // empty')
     if [[ -n "$mr_info" ]]; then
       local mr_state mr_number mr_title
       mr_state=$(echo "$mr_info" | /usr/bin/jq -r '.state')
