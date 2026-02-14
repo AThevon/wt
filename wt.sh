@@ -2553,6 +2553,7 @@ Back"
         ;;
       "Show"*)
         less <(git stash show -p "$stash_ref") </dev/tty
+        continue
         ;;
       "Rename"*)
         msg "Enter new stash message:"
