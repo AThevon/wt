@@ -3072,6 +3072,243 @@ run_install_wizard() {
 }
 
 # =============================================================================
+# Settings Menu
+# =============================================================================
+
+menu_settings() {
+  while true; do
+    # Read current values (live from variables, which were loaded from config)
+    local cur_editor="${WT_EDITOR:-$(get_editor) (auto)}"
+    local cur_platform="${WT_PLATFORM:-auto}"
+    local cur_worktree_dir="${WT_WORKTREE_DIR:-default}"
+    local cur_auto_cd="${WT_AUTO_CD:-true}"
+    local cur_feature_prefix="${WT_FEATURE_PREFIX:-feature/}"
+    local cur_auto_fetch="${WT_AUTO_FETCH:-true}"
+    local cur_claude_mode="${WT_CLAUDE_MODE:-prompt each time}"
+    local cur_list_limit="${WT_LIST_LIMIT:-20}"
+
+    local header="${C_BOLD}⚙ Settings${C_RESET}  ${C_DIM}Enter to edit · ^R reset${C_RESET}"
+
+    local options
+    options=$(printf '%s\n' \
+      "IDE              ${C_CYAN}${cur_editor}${C_RESET}" \
+      "Platform         ${C_CYAN}${cur_platform}${C_RESET}" \
+      "Worktree dir     ${C_CYAN}${cur_worktree_dir}${C_RESET}" \
+      "Auto-CD          ${C_CYAN}${cur_auto_cd}${C_RESET}" \
+      "Feature prefix   ${C_CYAN}${cur_feature_prefix}${C_RESET}" \
+      "Auto-fetch       ${C_CYAN}${cur_auto_fetch}${C_RESET}" \
+      "Claude mode      ${C_CYAN}${cur_claude_mode}${C_RESET}" \
+      "PR/Issue limit   ${C_CYAN}${cur_list_limit}${C_RESET}" \
+      "──────────────────────────────────────" \
+      "↺ Reset to defaults")
+
+    local result
+    result=$(echo "$options" | \
+      fzf --height=60% \
+          --layout=reverse \
+          --border \
+          --ansi \
+          --header="$header" \
+          --expect=ctrl-r \
+          --preview='
+            case {} in
+              IDE*)
+                echo "Preferred code editor"
+                echo ""
+                echo "Used when pressing Ctrl+E"
+                echo "in the main worktree menu."
+                echo ""
+                echo "auto = detect cursor > code > $EDITOR > vim"
+                ;;
+              Platform*)
+                echo "Git hosting platform"
+                echo ""
+                echo "auto   = detect from remote URL"
+                echo "github = force GitHub (gh CLI)"
+                echo "gitlab = force GitLab (glab CLI)"
+                ;;
+              Worktree*)
+                echo "Base directory for new worktrees"
+                echo ""
+                echo "default = created next to main repo"
+                echo "custom  = any absolute path, e.g. ~/worktrees"
+                ;;
+              Auto-CD*)
+                echo "Auto-navigate after worktree selection"
+                echo ""
+                echo "true  = cd to worktree on selection"
+                echo "false = no automatic cd"
+                ;;
+              Feature*)
+                echo "Branch prefix for issue worktrees"
+                echo ""
+                echo "Used when creating a worktree"
+                echo "from a GitHub/GitLab issue."
+                echo ""
+                echo "Examples: feature/ feat/ task/"
+                ;;
+              Auto-fetch*)
+                echo "Fetch before branch operations"
+                echo ""
+                echo "true  = git fetch --all before listing branches"
+                echo "false = use cached branch list (faster offline)"
+                ;;
+              Claude*)
+                echo "Default Claude launch mode"
+                echo ""
+                echo "prompt each time = show picker (default)"
+                echo "forced  = --dangerously-skip-permissions"
+                echo "ask     = interactive mode"
+                echo "plan    = --permission-mode=plan"
+                ;;
+              PR*)
+                echo "Max items in PR and issue lists"
+                echo ""
+                echo "Higher = more results, slower API call"
+                echo "Lower  = fewer results, faster"
+                ;;
+              *Reset*)
+                echo "Reset all settings to defaults"
+                echo ""
+                echo "Overwrites ~/.config/wt/config"
+                echo "with default values and runs wizard."
+                ;;
+            esac
+          ' \
+          --preview-window=right:45%)
+
+    local key selected
+    key=$(echo "$result" | head -1)
+    selected=$(echo "$result" | tail -n +2)
+    # Strip ANSI and take first word to get the setting name
+    selected=$(echo "$selected" | sed 's/\x1b\[[0-9;]*m//g' | awk '{print $1}')
+
+    # Ctrl+R or ↺ Reset to defaults
+    if [[ "$key" == "ctrl-r" ]] || [[ "$selected" == "↺" ]]; then
+      local confirm
+      confirm=$(printf '%s\n' "Yes, reset everything" "No, cancel" | \
+        fzf --height=15% --layout=reverse --border --ansi \
+            --header="${C_BOLD}Reset all settings to defaults?${C_RESET}")
+      if [[ "$confirm" == "Yes"* ]]; then
+        rm -f "$WT_CONFIG_FILE"
+        run_preferences_wizard
+        load_config
+        msg_success "Settings reset to defaults"
+      fi
+      continue
+    fi
+
+    # Exit on empty selection (Escape)
+    [[ -z "$selected" ]] && return 0
+
+    # Edit each setting based on first word of selection
+    case "$selected" in
+      IDE)
+        local editors=()
+        command -v cursor &>/dev/null && editors+=("cursor")
+        command -v code &>/dev/null && editors+=("code")
+        command -v nvim &>/dev/null && editors+=("nvim")
+        command -v vim &>/dev/null && editors+=("vim")
+        editors+=("custom...")
+        local choice
+        choice=$(printf '%s\n' "${editors[@]}" | \
+          fzf --height=30% --layout=reverse --border --ansi \
+              --header="${C_BOLD}Select IDE${C_RESET}")
+        if [[ -n "$choice" ]]; then
+          if [[ "$choice" == "custom..." ]]; then
+            msg "Enter editor command:"
+            read -r choice </dev/tty
+          fi
+          if [[ -n "$choice" ]]; then
+            save_config_value "WT_EDITOR" "$choice"
+            export WT_EDITOR="$choice"
+          fi
+        fi
+        ;;
+      Platform)
+        local choice
+        choice=$(printf '%s\n' "auto" "github" "gitlab" | \
+          fzf --height=20% --layout=reverse --border --ansi \
+              --header="${C_BOLD}Select platform${C_RESET}")
+        if [[ -n "$choice" ]]; then
+          save_config_value "WT_PLATFORM" "$choice"
+          export WT_PLATFORM="$choice"
+          _WT_PLATFORM="$choice"
+        fi
+        ;;
+      Worktree)
+        msg "Enter base directory for new worktrees (empty = default):"
+        local dir
+        read -r dir </dev/tty
+        save_config_value "WT_WORKTREE_DIR" "$dir"
+        export WT_WORKTREE_DIR="$dir"
+        ;;
+      Auto-CD)
+        local choice
+        choice=$(printf '%s\n' "true" "false" | \
+          fzf --height=15% --layout=reverse --border --ansi \
+              --header="${C_BOLD}Auto-CD${C_RESET}")
+        if [[ -n "$choice" ]]; then
+          save_config_value "WT_AUTO_CD" "$choice"
+          export WT_AUTO_CD="$choice"
+        fi
+        ;;
+      Feature)
+        msg "Enter feature branch prefix (e.g. feature/, feat/, task/):"
+        local prefix
+        read -r prefix </dev/tty
+        if [[ -n "$prefix" ]]; then
+          save_config_value "WT_FEATURE_PREFIX" "$prefix"
+          export WT_FEATURE_PREFIX="$prefix"
+        fi
+        ;;
+      Auto-fetch)
+        local choice
+        choice=$(printf '%s\n' "true" "false" | \
+          fzf --height=15% --layout=reverse --border --ansi \
+              --header="${C_BOLD}Auto-fetch${C_RESET}")
+        if [[ -n "$choice" ]]; then
+          save_config_value "WT_AUTO_FETCH" "$choice"
+          export WT_AUTO_FETCH="$choice"
+        fi
+        ;;
+      Claude)
+        local choice
+        choice=$(printf '%s\n' \
+          "prompt each time" \
+          "forced" \
+          "ask" \
+          "plan" | \
+          fzf --height=25% --layout=reverse --border --ansi \
+              --header="${C_BOLD}Claude mode${C_RESET}")
+        if [[ -n "$choice" ]]; then
+          local mode_val=""
+          case "$choice" in
+            "forced"*) mode_val="forced" ;;
+            "ask"*)    mode_val="ask" ;;
+            "plan"*)   mode_val="plan" ;;
+          esac
+          save_config_value "WT_CLAUDE_MODE" "$mode_val"
+          export WT_CLAUDE_MODE="$mode_val"
+        fi
+        ;;
+      PR/Issue)
+        msg "Enter max items in lists (default: 20):"
+        local limit
+        read -r limit </dev/tty
+        if [[ "$limit" =~ ^[0-9]+$ ]]; then
+          save_config_value "WT_LIST_LIMIT" "$limit"
+          export WT_LIST_LIMIT="$limit"
+        fi
+        ;;
+      "──────────────────────────────────────")
+        continue
+        ;;
+    esac
+  done
+}
+
+# =============================================================================
 # Menu principal
 # =============================================================================
 
