@@ -1166,6 +1166,16 @@ select_claude_mode() {
   local context_type="$1"  # pr-review, pr-work, issue-work
   local context_num="$2"
 
+  # If a default mode is configured, bypass the picker
+  if [[ -n "${WT_CLAUDE_MODE:-}" ]]; then
+    case "$WT_CLAUDE_MODE" in
+      forced|ask|plan)
+        echo "$WT_CLAUDE_MODE"
+        return
+        ;;
+    esac
+  fi
+
   local title
   case "$context_type" in
     "pr-review") title="PR #$context_num review" ;;
