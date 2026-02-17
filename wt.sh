@@ -396,6 +396,50 @@ fi
 # Helpers - TOUT sur stderr sauf le path final
 # =============================================================================
 
+# =============================================================================
+# Config
+# =============================================================================
+
+WT_CONFIG_FILE="${HOME}/.config/wt/config"
+
+load_config() {
+  [[ -f "$WT_CONFIG_FILE" ]] && source "$WT_CONFIG_FILE"
+}
+
+save_config_value() {
+  local key="$1"
+  local value="$2"
+  local config_dir
+  config_dir=$(dirname "$WT_CONFIG_FILE")
+
+  # Create config dir if needed
+  mkdir -p "$config_dir"
+
+  # Create file with header if it doesn't exist
+  if [[ ! -f "$WT_CONFIG_FILE" ]]; then
+    cat > "$WT_CONFIG_FILE" << 'WTEOF'
+# wt — user configuration
+# Edit manually or via: wt > ⚙ Settings
+WTEOF
+  fi
+
+  # Update or append the key
+  if grep -q "^${key}=" "$WT_CONFIG_FILE" 2>/dev/null; then
+    # Replace existing key (macOS-compatible sed)
+    sed -i '' "s|^${key}=.*|${key}=${value}|" "$WT_CONFIG_FILE"
+  else
+    echo "${key}=${value}" >> "$WT_CONFIG_FILE"
+  fi
+}
+
+get_config_value() {
+  local key="$1"
+  local default="$2"
+  local value
+  value=$(grep "^${key}=" "$WT_CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
+  echo "${value:-$default}"
+}
+
 has_fzf() {
   command -v fzf &> /dev/null
 }
@@ -2980,6 +3024,8 @@ main_menu() {
 # =============================================================================
 # Point d'entrée
 # =============================================================================
+
+load_config
 
 if [[ "$1" == "--pr-preview" ]]; then
   pr_preview "$2"
