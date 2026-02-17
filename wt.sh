@@ -558,7 +558,7 @@ get_platform_name() {
 cli_pr_list() {
   local platform=$(detect_platform)
   if [[ "$platform" == "gitlab" ]]; then
-    glab mr list --per-page 20 --output json 2>/dev/null | \
+    glab mr list --per-page "${WT_LIST_LIMIT:-20}" --output json 2>/dev/null | \
       /usr/bin/jq -r '.[] |
         (if .draft then "\u001b[2m[draft]\u001b[0m"
          elif .head_pipeline == null then "\u001b[2m[--]\u001b[0m"
@@ -613,12 +613,12 @@ cli_pr_diff_stat() {
 cli_issue_list() {
   local platform=$(detect_platform)
   if [[ "$platform" == "gitlab" ]]; then
-    glab issue list --per-page 20 --output json 2>/dev/null | \
+    glab issue list --per-page "${WT_LIST_LIMIT:-20}" --output json 2>/dev/null | \
       /usr/bin/jq -r '.[] |
         (if (.labels | length) > 0 then (.labels | join(","))[0:15] else "-" end) as $labels |
         "#\(.iid)\t\(.title[0:50])\t@\(.author.username)\t\($labels)"'
   else
-    gh issue list --limit 20 --json number,title,author,labels,state 2>/dev/null | \
+    gh issue list --limit "${WT_LIST_LIMIT:-20}" --json number,title,author,labels,state 2>/dev/null | \
       /usr/bin/jq -r '.[] |
         (if (.labels | length) > 0 then (.labels | map(.name) | join(","))[0:15] else "-" end) as $labels |
         "#\(.number)\t\(.title[0:50])\t@\(.author.login)\t\($labels)"'
