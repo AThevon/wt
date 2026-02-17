@@ -332,6 +332,7 @@ Options:
   --help, -h       Show this help message
   --version, -v    Show version number
   --setup          Install wt (add to shell, create symlinks)
+  --wizard         Re-run the first-time setup wizard
   --dev            Switch to dev mode (use wt.sh from current worktree)
   --release        Switch back to release mode (use wt-core from PATH)
 
