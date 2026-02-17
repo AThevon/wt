@@ -3335,6 +3335,7 @@ main_menu() {
     if [[ "$secondary_count" -ge 1 ]]; then
       actions+=$'\n'"${C_DIM}✕${C_RESET} Delete worktree(s)"
     fi
+    actions+=$'\n'"${C_DIM}⚙${C_RESET} Settings"
     actions+=$'\n'"${C_DIM}◀${C_RESET} Quit"
 
     local menu="${worktrees_formatted}${actions}"
@@ -3357,7 +3358,7 @@ main_menu() {
               exit 0
             fi
             # Clean line (remove icon only for actions, not worktrees)
-            if [[ \"\$line\" == \"＋\"* || \"\$line\" == \"⬡\"* || \"\$line\" == \"✕\"* || \"\$line\" == \"◀\"* ]]; then
+            if [[ \"\$line\" == \"＋\"* || \"\$line\" == \"⬡\"* || \"\$line\" == \"✕\"* || \"\$line\" == \"◀\"* || \"\$line\" == \"⚙\"* ]]; then
               clean_line=\$(echo \"\$line\" | sed -E 's/^[^A-Za-z]*//')
             else
               clean_line=\"\$line\"
@@ -3396,6 +3397,16 @@ main_menu() {
               else
                 echo 'No stashes found'
               fi
+            elif [[ \"\$clean_line\" == \"Settings\"* ]]; then
+              echo '> Manage wt preferences'
+              echo ''
+              echo 'Configure:'
+              echo '  IDE, Platform, Worktree dir'
+              echo '  Auto-CD, Feature prefix'
+              echo '  Auto-fetch, Claude mode'
+              echo '  PR/Issue limit'
+              echo ''
+              echo 'Config: ~/.config/wt/config'
             else
               path=\$(echo \"\$line\" | /usr/bin/awk '{print \$2}' | /usr/bin/sed \"s|^~|\$HOME|\")
               if [[ -d \"\$path\" ]]; then
@@ -3524,7 +3535,7 @@ main_menu() {
 
     # Clean action lines (remove icon only for actions, not worktrees)
     local clean_selected
-    if [[ "$selected" == "＋"* || "$selected" == "⬡"* || "$selected" == "✕"* || "$selected" == "◀"* ]]; then
+    if [[ "$selected" == "＋"* || "$selected" == "⬡"* || "$selected" == "✕"* || "$selected" == "◀"* || "$selected" == "⚙"* ]]; then
       clean_selected=$(echo "$selected" | sed -E 's/^[^A-Za-z]*//')
     else
       clean_selected="$selected"
@@ -3541,6 +3552,9 @@ main_menu() {
         ;;
       "Manage stashes"*)
         menu_stash
+        ;;
+      "Settings"*)
+        menu_settings
         ;;
       "Delete"*)
         local path
