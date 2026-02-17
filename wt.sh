@@ -443,6 +443,15 @@ get_config_value() {
   echo "${value:-$default}"
 }
 
+get_worktree_base_dir() {
+  if [[ -n "${WT_WORKTREE_DIR:-}" ]]; then
+    # Expand ~ if present
+    echo "${WT_WORKTREE_DIR/#\~/$HOME}"
+  else
+    echo "$(dirname "$MAIN_REPO")"
+  fi
+}
+
 has_fzf() {
   command -v fzf &> /dev/null
 }
@@ -1264,7 +1273,7 @@ create_from_current() {
   local sanitized=$(echo "$current_branch" | sed 's|/|-|g')
   local worktree_name="${REPO_NAME}-${sanitized}-copy-${timestamp}"
   # Toujours créer à côté du repo PRINCIPAL
-  local worktree_path="$(dirname "$MAIN_REPO")/${worktree_name}"
+  local worktree_path="$(get_worktree_base_dir)/${worktree_name}"
   local new_branch="temp/${sanitized}-${timestamp}"
 
   msg "Creating worktree..."
@@ -1305,7 +1314,7 @@ create_from_branch() {
 
   local sanitized=$(echo "$branch_name" | sed 's|^origin/||' | sed 's|/|-|g')
   # Toujours créer à côté du repo PRINCIPAL
-  local worktree_path="$(dirname "$MAIN_REPO")/${REPO_NAME}-${sanitized}"
+  local worktree_path="$(get_worktree_base_dir)/${REPO_NAME}-${sanitized}"
 
   msg "Creating worktree..."
 
@@ -1367,7 +1376,7 @@ create_new_branch() {
 
   # 4. Créer le worktree
   local sanitized=$(echo "$branch_name" | sed 's|/|-|g')
-  local worktree_path="$(dirname "$MAIN_REPO")/${REPO_NAME}-${sanitized}"
+  local worktree_path="$(get_worktree_base_dir)/${REPO_NAME}-${sanitized}"
 
   msg "Creating worktree with new branch '$branch_name' from '$base_branch'..."
 
@@ -1386,7 +1395,7 @@ create_from_pr() {
   local pr_branch="$1"
   local sanitized=$(echo "$pr_branch" | sed 's|^origin/||' | sed 's|/|-|g')
   # Toujours créer à côté du repo PRINCIPAL, avec préfixe "reviewing"
-  local worktree_path="$(dirname "$MAIN_REPO")/${REPO_NAME}-reviewing-${sanitized}"
+  local worktree_path="$(get_worktree_base_dir)/${REPO_NAME}-reviewing-${sanitized}"
 
   # Check if worktree already exists at this path
   if [[ -d "$worktree_path" ]]; then
@@ -1451,7 +1460,7 @@ create_from_issue() {
   done
 
   local sanitized=$(echo "$branch_name" | sed 's|/|-|g')
-  local worktree_path="$(dirname "$MAIN_REPO")/${REPO_NAME}-${sanitized}"
+  local worktree_path="$(get_worktree_base_dir)/${REPO_NAME}-${sanitized}"
 
   # Récupérer la branche par défaut du repo
   local default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
