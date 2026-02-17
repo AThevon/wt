@@ -103,8 +103,16 @@ function wt() {
     if [[ -n "$current_wt" && "$current_wt" != "$target" ]]; then
       echo "$current_wt" > ~/.wt_prev
     fi
-    cd "$target"
-    echo "Navigated to: $target"
+    local _wt_auto_cd=true
+    if [[ -f "${HOME}/.config/wt/config" ]]; then
+      local _val
+      _val=$(grep '^WT_AUTO_CD=' "${HOME}/.config/wt/config" 2>/dev/null | cut -d= -f2 | tr -d '"'"'"')
+      [[ "$_val" == "false" ]] && _wt_auto_cd=false
+    fi
+    if [[ "$_wt_auto_cd" == "true" ]]; then
+      cd "$target"
+      echo "Navigated to: $target"
+    fi
 
     # Launch claude if marker present
     # Formats: CLAUDE:type:num:mode or CLAUDE:issue-auto:num
