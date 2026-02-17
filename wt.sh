@@ -585,7 +585,7 @@ cli_pr_list() {
          else "\u001b[33m[..]\u001b[0m" end) as $ci |
         "#\(.iid)\t\($ci)  \t\(.title[0:50])\t\u001b[2m@\(.author.username)\u001b[0m\t\(.source_branch)"'
   else
-    gh pr list --json number,title,headRefName,author,reviewDecision,statusCheckRollup,isDraft 2>/dev/null | \
+    gh pr list --limit "${WT_LIST_LIMIT:-20}" --json number,title,headRefName,author,reviewDecision,statusCheckRollup,isDraft 2>/dev/null | \
       /usr/bin/jq -r '.[] |
         (if .isDraft then "\u001b[2m[draft]\u001b[0m"
          elif (.statusCheckRollup | length) == 0 then "\u001b[2m[--]\u001b[0m"
