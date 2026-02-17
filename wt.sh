@@ -2982,6 +2982,96 @@ WTEOF
 }
 
 # =============================================================================
+# First-time Install Wizard
+# =============================================================================
+
+run_install_wizard() {
+  print_logo
+
+  # Detect what needs to be installed
+  local needs_symlink=false
+  local needs_rc=false
+  local install_dir="/usr/local/bin"
+  local script_path
+  script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+
+  if ! command -v wt-core &>/dev/null; then
+    needs_symlink=true
+    if [[ ! -d "/usr/local/bin" || ! -w "/usr/local/bin" ]]; then
+      install_dir="${HOME}/.local/bin"
+    fi
+  fi
+
+  local shell_name rc_file
+  shell_name=$(basename "$SHELL")
+  case "$shell_name" in
+    zsh)  rc_file="$HOME/.zshrc" ;;
+    bash) rc_file="$HOME/.bashrc" ;;
+    *)    rc_file="$HOME/.profile" ;;
+  esac
+
+  local init_line='command -v wt-core &>/dev/null && eval "$(wt-core --shell-init)"'
+  if ! grep -q "wt-core --shell-init" "$rc_file" 2>/dev/null; then
+    needs_rc=true
+  fi
+
+  # If nothing to install, skip to preferences
+  if [[ "$needs_symlink" == "false" && "$needs_rc" == "false" ]]; then
+    run_preferences_wizard
+    return
+  fi
+
+  # Build what-will-happen list
+  msg "  ${C_BOLD}wt${C_RESET} needs a quick one-time setup."
+  msg "  This will:"
+  msg ""
+  [[ "$needs_symlink" == "true" ]] && msg "    ${C_DIM}→${C_RESET} Create symlink  ${C_CYAN}${install_dir}/wt-core${C_RESET}"
+  [[ "$needs_rc" == "true" ]]      && msg "    ${C_DIM}→${C_RESET} Add init line   ${C_CYAN}${rc_file}${C_RESET}"
+  msg ""
+
+  local confirm_result
+  confirm_result=$(printf '%s\n' \
+    "Yes, set it up" \
+    "No, skip for now" | \
+    fzf --height=15% \
+        --layout=reverse \
+        --border \
+        --ansi \
+        --no-sort \
+        --header="${C_BOLD}Install now?${C_RESET}")
+
+  if [[ "$confirm_result" != "Yes"* ]]; then
+    msg ""
+    msg "  Skipping install. Run: ${C_CYAN}./wt.sh --setup${C_RESET} to install later."
+    msg ""
+    return 1
+  fi
+
+  # Perform installation
+  if [[ "$needs_symlink" == "true" ]]; then
+    mkdir -p "$install_dir"
+    ln -sf "$script_path" "${install_dir}/wt-core"
+    msg "  ${C_GREEN}✓${C_RESET} Created: ${install_dir}/wt-core"
+  fi
+
+  if [[ "$needs_rc" == "true" ]]; then
+    echo "" >> "$rc_file"
+    echo "# wt - Git Worktree Manager" >> "$rc_file"
+    echo "$init_line" >> "$rc_file"
+    msg "  ${C_GREEN}✓${C_RESET} Added init line to ${rc_file}"
+  fi
+
+  msg ""
+  msg "  ${C_BOLD}Installation complete!${C_RESET}"
+  msg "  Run ${C_CYAN}source ${rc_file}${C_RESET} to activate (or restart your terminal)."
+  msg ""
+  sleep 1
+
+  # Continue to preferences
+  run_preferences_wizard
+}
+
+# =============================================================================
 # Menu principal
 # =============================================================================
 
