@@ -1424,7 +1424,8 @@ create_from_issue() {
 
   # Créer un slug à partir du titre
   local slug=$(echo "$issue_title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-30)
-  local base_branch_name="feature/${issue_num}-${slug}"
+  local _feature_prefix="${WT_FEATURE_PREFIX:-feature/}"
+  local base_branch_name="${_feature_prefix}${issue_num}-${slug}"
   local branch_name="$base_branch_name"
 
   # Incrémenter si la branche existe déjà
