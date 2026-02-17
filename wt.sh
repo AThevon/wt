@@ -2807,6 +2807,181 @@ action_delete_worktrees() {
 }
 
 # =============================================================================
+# First-time Preferences Wizard
+# =============================================================================
+
+run_preferences_wizard() {
+  msg ""
+  msg "  ${C_BOLD}Let's configure wt${C_RESET} in 2 quick steps."
+  msg "  ${C_DIM}(Press ^S to skip any step)${C_RESET}"
+  msg ""
+
+  # Detect available editors
+  local available_editors=()
+  command -v cursor &>/dev/null && available_editors+=("cursor")
+  command -v code &>/dev/null && available_editors+=("code")
+  command -v nvim &>/dev/null && available_editors+=("nvim")
+  command -v vim &>/dev/null && available_editors+=("vim")
+  # Always offer custom
+  available_editors+=("custom...")
+
+  # Step 1: IDE
+  local header_step1="${C_BOLD}Step 1/2 — Preferred editor${C_RESET}  ${C_DIM}^S skip${C_RESET}"
+  local ide_result
+  ide_result=$(printf '%s\n' "${available_editors[@]}" | \
+    fzf --height=40% \
+        --layout=reverse \
+        --border \
+        --ansi \
+        --header="$header_step1" \
+        --expect=ctrl-s \
+        --preview='
+          case {} in
+            cursor*) echo "Cursor AI Editor"
+                     echo ""
+                     echo "AI-powered fork of VS Code"
+                     echo "from Cursor.sh"
+                     ;;
+            code*)   echo "Visual Studio Code"
+                     echo ""
+                     echo "Microsoft'"'"'s open-source editor"
+                     ;;
+            nvim*)   echo "Neovim"
+                     echo ""
+                     echo "Hyperextensible Vim-based editor"
+                     ;;
+            vim*)    echo "Vim"
+                     echo ""
+                     echo "Classic terminal editor"
+                     ;;
+            custom*) echo "Custom editor"
+                     echo ""
+                     echo "Enter your editor command"
+                     echo "(e.g. emacs, nano, subl)"
+                     ;;
+          esac
+          echo ""
+          echo "Used when pressing Ctrl+E"
+          echo "in the worktree menu."
+        ' \
+        --preview-window=right:40%)
+
+  local ide_key ide_choice
+  ide_key=$(echo "$ide_result" | head -1)
+  ide_choice=$(echo "$ide_result" | tail -n +2)
+  # Strip ANSI codes and take first word
+  ide_choice=$(echo "$ide_choice" | sed 's/\x1b\[[0-9;]*m//g' | awk '{print $1}')
+
+  local selected_editor=""
+  if [[ "$ide_key" != "ctrl-s" && -n "$ide_choice" ]]; then
+    if [[ "$ide_choice" == "custom..." ]]; then
+      msg ""
+      msg "Enter your editor command (e.g. emacs, nano, subl):"
+      read -r selected_editor </dev/tty
+    else
+      selected_editor="$ide_choice"
+    fi
+  fi
+
+  # Step 2: Platform
+  local header_step2="${C_BOLD}Step 2/2 — Git platform${C_RESET}  ${C_DIM}^S skip${C_RESET}"
+  local current_remote_guess="github"
+  local remote_url
+  remote_url=$(git -C "${MAIN_REPO:-$PWD}" remote get-url origin 2>/dev/null || echo "")
+  [[ "$remote_url" == *gitlab* ]] && current_remote_guess="gitlab"
+
+  local platform_result
+  platform_result=$(printf '%s\n' \
+    "auto" \
+    "github" \
+    "gitlab" | \
+    fzf --height=30% \
+        --layout=reverse \
+        --border \
+        --ansi \
+        --header="$header_step2" \
+        --expect=ctrl-s \
+        --preview="
+          case {} in
+            auto*)
+              echo 'auto (recommended)'
+              echo ''
+              echo 'Reads your git remote URL'
+              echo 'to detect GitHub vs GitLab.'
+              echo ''
+              echo \"Detected for this repo: $current_remote_guess\"
+              ;;
+            github*)
+              echo 'GitHub'
+              echo ''
+              echo 'Forces GitHub mode.'
+              echo 'Uses: gh CLI'
+              ;;
+            gitlab*)
+              echo 'GitLab'
+              echo ''
+              echo 'Forces GitLab mode.'
+              echo 'Uses: glab CLI'
+              ;;
+          esac
+        " \
+        --preview-window=right:40%)
+
+  local platform_key platform_choice
+  platform_key=$(echo "$platform_result" | head -1)
+  platform_choice=$(echo "$platform_result" | tail -n +2 | awk '{print $1}')
+
+  local selected_platform="auto"
+  if [[ "$platform_key" != "ctrl-s" && -n "$platform_choice" ]]; then
+    selected_platform="$platform_choice"
+  fi
+
+  # Write config file
+  mkdir -p "$(dirname "$WT_CONFIG_FILE")"
+  cat > "$WT_CONFIG_FILE" << WTEOF
+# wt — user configuration
+# Edit manually or via: wt > ⚙ Settings
+
+WT_EDITOR=${selected_editor}
+WT_PLATFORM=${selected_platform}
+WT_WORKTREE_DIR=
+WT_AUTO_CD=true
+WT_FEATURE_PREFIX=feature/
+WT_AUTO_FETCH=true
+WT_CLAUDE_MODE=
+WT_LIST_LIMIT=20
+WTEOF
+
+  # Source the new config
+  load_config
+
+  # Success screen
+  local editor_display="${selected_editor:-auto-detect}"
+  local editor_pad=$(( 17 - ${#editor_display} ))
+  local platform_pad=$(( 19 - ${#selected_platform} ))
+  [[ $editor_pad -lt 0 ]] && editor_pad=0
+  [[ $platform_pad -lt 0 ]] && platform_pad=0
+
+  msg ""
+  msg "  ╔══════════════════════════════════════╗"
+  msg "  ║  ${C_GREEN}✓${C_RESET}  wt is configured                ║"
+  msg "  ╠══════════════════════════════════════╣"
+  msg "  ║                                      ║"
+  msg "  ║  IDE         ${editor_display}$(printf '%*s' $editor_pad '')║"
+  msg "  ║  Platform    ${selected_platform}$(printf '%*s' $platform_pad '')║"
+  msg "  ║                                      ║"
+  msg "  ║  Config → ~/.config/wt/config        ║"
+  msg "  ║                                      ║"
+  msg "  ║  Tip: wt > ⚙ Settings to change      ║"
+  msg "  ║                                      ║"
+  msg "  ╚══════════════════════════════════════╝"
+  msg ""
+  msg "  Launching wt..."
+  msg ""
+  sleep 1
+}
+
+# =============================================================================
 # Menu principal
 # =============================================================================
 
