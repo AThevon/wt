@@ -456,6 +456,13 @@ has_claude() {
 }
 
 get_editor() {
+  # Config takes priority
+  local configured="${WT_EDITOR:-}"
+  if [[ -n "$configured" ]]; then
+    echo "$configured"
+    return
+  fi
+  # Auto-detect
   if command -v cursor &>/dev/null; then echo "cursor"
   elif command -v code &>/dev/null; then echo "code"
   elif [[ -n "$EDITOR" ]]; then echo "$EDITOR"
