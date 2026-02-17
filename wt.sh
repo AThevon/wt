@@ -424,9 +424,12 @@ WTEOF
   fi
 
   # Update or append the key
-  if grep -q "^${key}=" "$WT_CONFIG_FILE" 2>/dev/null; then
-    # Replace existing key (macOS-compatible sed)
-    sed -i '' "s|^${key}=.*|${key}=${value}|" "$WT_CONFIG_FILE"
+  local tmp_file="${WT_CONFIG_FILE}.tmp"
+  if grep -Fq "^${key}=" "$WT_CONFIG_FILE" 2>/dev/null; then
+    # Replace existing key using awk (safe with special chars in value)
+    awk -v k="$key" -v v="$value" \
+      'BEGIN{FS="="; OFS="="} /^[[:space:]]*#/{print; next} $1==k{print k"="v; next} {print}' \
+      "$WT_CONFIG_FILE" > "$tmp_file" && mv "$tmp_file" "$WT_CONFIG_FILE"
   else
     echo "${key}=${value}" >> "$WT_CONFIG_FILE"
   fi
