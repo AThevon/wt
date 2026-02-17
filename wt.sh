@@ -1271,8 +1271,10 @@ create_from_current() {
 
 # Créer un worktree à partir d'une branche
 create_from_branch() {
-  msg "Fetching branches..."
-  git fetch --all --prune >/dev/null 2>&1
+  if [[ "${WT_AUTO_FETCH:-true}" != "false" ]]; then
+    msg "Fetching branches..."
+    git fetch --all --prune >/dev/null 2>&1
+  fi
 
   local branch_name
   local branch_header="${C_BOLD}Select branch${C_RESET}  ${C_DIM}Enter select · Esc cancel${C_RESET}"
@@ -1319,8 +1321,10 @@ create_new_branch() {
   fi
 
   # 2. Sélectionner branche de base
-  msg "Fetching branches..."
-  git fetch --all --prune >/dev/null 2>&1
+  if [[ "${WT_AUTO_FETCH:-true}" != "false" ]]; then
+    msg "Fetching branches..."
+    git fetch --all --prune >/dev/null 2>&1
+  fi
 
   local current_branch=$(git branch --show-current 2>/dev/null || echo "HEAD")
   local base_header="${C_BOLD}Base branch${C_RESET}  ${C_DIM}Enter select · Esc use $current_branch${C_RESET}"
