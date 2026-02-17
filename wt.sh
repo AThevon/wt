@@ -3334,6 +3334,12 @@ main_menu() {
 
 load_config
 
+if [[ "$1" == "--wizard" ]]; then
+  rm -f "$WT_CONFIG_FILE"
+  run_preferences_wizard
+  exit 0
+fi
+
 if [[ "$1" == "--pr-preview" ]]; then
   pr_preview "$2"
   exit 0
@@ -3407,6 +3413,15 @@ if [[ -n "$1" && "$1" != "--"* ]]; then
   fi
   msg "No worktree matching '$1'"
   exit 1
+fi
+
+# First-time setup wizard
+if [[ -z "$1" ]] && [[ -t 2 ]]; then
+  if ! command -v wt-core &>/dev/null; then
+    run_install_wizard || true
+  elif [[ ! -f "$WT_CONFIG_FILE" ]]; then
+    run_preferences_wizard
+  fi
 fi
 
 # Run main menu and capture result
