@@ -366,18 +366,20 @@ EOF
   exit 0
 fi
 
-# Vérifier qu'on est dans un repo git (sauf pour wt -)
-if [[ "$1" != "-" ]] && ! git rev-parse --git-dir > /dev/null 2>&1; then
-  echo "Not in a git repository" >&2
-  exit 1
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  # Vérifier qu'on est dans un repo git (sauf pour wt -)
+  if [[ "$1" != "-" ]] && ! git rev-parse --git-dir > /dev/null 2>&1; then
+    echo "Not in a git repository" >&2
+    exit 1
+  fi
+  
+  # REPO_ROOT = worktree actuel (peut être secondaire)
+  # MAIN_REPO = worktree principal (toujours le premier dans la liste)
+  REPO_ROOT=$(git rev-parse --show-toplevel)
+  MAIN_REPO=$(git worktree list --porcelain | grep "^worktree " | head -1 | cut -d' ' -f2-)
+  REPO_NAME=$(basename "$MAIN_REPO")
+  SCRIPT_PATH="${BASH_SOURCE[0]}"
 fi
-
-# REPO_ROOT = worktree actuel (peut être secondaire)
-# MAIN_REPO = worktree principal (toujours le premier dans la liste)
-REPO_ROOT=$(git rev-parse --show-toplevel)
-MAIN_REPO=$(git worktree list --porcelain | grep "^worktree " | head -1 | cut -d' ' -f2-)
-REPO_NAME=$(basename "$MAIN_REPO")
-SCRIPT_PATH="${BASH_SOURCE[0]}"
 
 # =============================================================================
 # Colors & Style
@@ -3584,6 +3586,8 @@ main_menu() {
 # Point d'entrée
 # =============================================================================
 
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+
 load_config
 
 if [[ "$1" == "--wizard" ]]; then
@@ -3683,3 +3687,5 @@ if [[ -n "$result" ]]; then
   echo "$result"
 fi
 
+
+fi
