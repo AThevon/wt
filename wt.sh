@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.8.0"
+VERSION="1.8.1"
 
 # =============================================================================
 # Options de ligne de commande
@@ -106,7 +106,7 @@ function wt() {
     local _wt_auto_cd=true
     if [[ -f "${HOME}/.config/wt/config" ]]; then
       local _val
-      _val=$(grep '^WT_AUTO_CD=' "${HOME}/.config/wt/config" 2>/dev/null | cut -d= -f2 | tr -d '"'"'"')
+      _val=$(grep '^WT_AUTO_CD=' "${HOME}/.config/wt/config" 2>/dev/null | cut -d= -f2 | tr -d "\"'")
       [[ "$_val" == "false" ]] && _wt_auto_cd=false
     fi
     if [[ "$_wt_auto_cd" == "true" ]]; then
