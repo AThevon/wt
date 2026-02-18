@@ -21,9 +21,8 @@ teardown() {
 
 @test "load_config: does nothing when config file does not exist" {
   rm -f "$WT_CONFIG_FILE"
-  # [[ -f ... ]] && source ... returns 1 when file is absent — expected bash behaviour
   run load_config
-  assert_failure
+  assert_success
 }
 
 # --- save_config_value ---
@@ -35,15 +34,11 @@ teardown() {
 }
 
 @test "save_config_value: updates an existing key without duplicating it" {
-  # NOTE: grep -F in save_config_value treats ^ as a literal char, so the
-  # "replace" branch never triggers and the key is appended again.
-  # This test documents the actual (buggy) behaviour: count=2, last value wins
-  # via get_config_value which reads the first match.
   echo "WT_LIST_LIMIT=20" > "$WT_CONFIG_FILE"
   save_config_value "WT_LIST_LIMIT" "99"
   local count
   count=$(grep -c "^WT_LIST_LIMIT=" "$WT_CONFIG_FILE")
-  assert_equal "$count" "2"
+  assert_equal "$count" "1"
   run grep "^WT_LIST_LIMIT=99" "$WT_CONFIG_FILE"
   assert_success
 }

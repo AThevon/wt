@@ -414,7 +414,9 @@ fi
 WT_CONFIG_FILE="${HOME}/.config/wt/config"
 
 load_config() {
-  [[ -f "$WT_CONFIG_FILE" ]] && source "$WT_CONFIG_FILE"
+  if [[ -f "$WT_CONFIG_FILE" ]]; then
+    source "$WT_CONFIG_FILE"
+  fi
 }
 
 save_config_value() {
@@ -436,7 +438,7 @@ WTEOF
 
   # Update or append the key
   local tmp_file="${WT_CONFIG_FILE}.tmp"
-  if grep -Fq "^${key}=" "$WT_CONFIG_FILE" 2>/dev/null; then
+  if grep -q "^${key}=" "$WT_CONFIG_FILE" 2>/dev/null; then
     # Replace existing key using awk (safe with special chars in value)
     awk -v k="$key" -v v="$value" \
       'BEGIN{FS="="; OFS="="} /^[[:space:]]*#/{print; next} $1==k{print k"="v; next} {print}' \
