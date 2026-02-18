@@ -411,7 +411,7 @@ fi
 # Config
 # =============================================================================
 
-WT_CONFIG_FILE="${HOME}/.config/wt/config"
+WT_CONFIG_FILE="${WT_CONFIG_FILE:-${HOME}/.config/wt/config}"
 
 load_config() {
   if [[ -f "$WT_CONFIG_FILE" ]]; then
