@@ -18,3 +18,13 @@ jobs:
           scandir: '.'
           severity: error
           ignore_paths: 'completions'
+
+  bats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Run BATS tests
+        run: ./tests/run.sh

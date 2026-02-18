@@ -34,6 +34,7 @@ Git worktrees are powerful but managing them manually is tedious. `wt` provides:
 - **Issue workflow** — create a worktree from a GitHub issue with auto-named branch
 - **Claude integration** — auto-resolve issues, fix CI failures, review PRs
 - **Dirty indicator** — see which worktrees have uncommitted changes
+- **Persistent settings** — configure editor, platform, prefixes and more via `⚙ Settings`
 
 ## Installation
 
@@ -58,6 +59,12 @@ wt --setup
 ```
 
 This will check dependencies, create symlinks, and configure your shell.
+
+On first launch, `wt` automatically runs a preferences wizard to choose your editor and platform. To re-run it at any time:
+
+```bash
+wt --wizard
+```
 
 ## Usage
 
@@ -97,6 +104,7 @@ wt .        # Main worktree
 │   Create a worktree                                                     │
 │   Manage stashes                                                        │
 │   Delete worktree(s)                                                    │
+│ ⚙ Settings                                                              │
 │   Quit                                                                  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -142,6 +150,23 @@ Launch Claude from any issue or PR with three modes:
 **Fix CI failures:** Claude fetches logs, fixes the code, and pushes.
 
 **Review PRs:** Claude performs a comprehensive code review.
+
+### Settings
+
+Access `⚙ Settings` from the main menu to configure preferences. Settings are saved to `~/.config/wt/config`.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `WT_EDITOR` | auto-detected | Preferred editor (Ctrl+E) |
+| `WT_PLATFORM` | auto | Git platform: `auto` / `github` / `gitlab` |
+| `WT_WORKTREE_DIR` | *(parent of repo)* | Custom worktree root directory |
+| `WT_AUTO_CD` | `true` | Auto-navigate to selected worktree |
+| `WT_FEATURE_PREFIX` | `feature/` | Prefix for branches created from issues |
+| `WT_AUTO_FETCH` | `true` | Fetch before listing PRs/issues |
+| `WT_CLAUDE_MODE` | *(ask each time)* | Default Claude mode: `forced` / `ask` / `plan` |
+| `WT_LIST_LIMIT` | `20` | Max items in PR/issue lists |
+
+You can also edit the file directly or reset to defaults via `Ctrl+R` in the Settings menu.
 
 ### Stash Management
 

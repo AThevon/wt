@@ -103,8 +103,16 @@ function wt() {
     if [[ -n "$current_wt" && "$current_wt" != "$target" ]]; then
       echo "$current_wt" > ~/.wt_prev
     fi
-    cd "$target"
-    echo "Navigated to: $target"
+    local _wt_auto_cd=true
+    if [[ -f "${HOME}/.config/wt/config" ]]; then
+      local _val
+      _val=$(grep '^WT_AUTO_CD=' "${HOME}/.config/wt/config" 2>/dev/null | cut -d= -f2 | tr -d '"'"'"')
+      [[ "$_val" == "false" ]] && _wt_auto_cd=false
+    fi
+    if [[ "$_wt_auto_cd" == "true" ]]; then
+      cd "$target"
+      echo "Navigated to: $target"
+    fi
 
     # Launch claude if marker present
     # Formats: CLAUDE:type:num:mode or CLAUDE:issue-auto:num
@@ -324,6 +332,7 @@ Options:
   --help, -h       Show this help message
   --version, -v    Show version number
   --setup          Install wt (add to shell, create symlinks)
+  --wizard         Re-run the first-time setup wizard
   --dev            Switch to dev mode (use wt.sh from current worktree)
   --release        Switch back to release mode (use wt-core from PATH)
 
@@ -357,18 +366,20 @@ EOF
   exit 0
 fi
 
-# Vérifier qu'on est dans un repo git (sauf pour wt -)
-if [[ "$1" != "-" ]] && ! git rev-parse --git-dir > /dev/null 2>&1; then
-  echo "Not in a git repository" >&2
-  exit 1
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  # Vérifier qu'on est dans un repo git (sauf pour wt -)
+  if [[ "$1" != "-" ]] && ! git rev-parse --git-dir > /dev/null 2>&1; then
+    echo "Not in a git repository" >&2
+    exit 1
+  fi
+  
+  # REPO_ROOT = worktree actuel (peut être secondaire)
+  # MAIN_REPO = worktree principal (toujours le premier dans la liste)
+  REPO_ROOT=$(git rev-parse --show-toplevel)
+  MAIN_REPO=$(git worktree list --porcelain | grep "^worktree " | head -1 | cut -d' ' -f2-)
+  REPO_NAME=$(basename "$MAIN_REPO")
+  SCRIPT_PATH="${BASH_SOURCE[0]}"
 fi
-
-# REPO_ROOT = worktree actuel (peut être secondaire)
-# MAIN_REPO = worktree principal (toujours le premier dans la liste)
-REPO_ROOT=$(git rev-parse --show-toplevel)
-MAIN_REPO=$(git worktree list --porcelain | grep "^worktree " | head -1 | cut -d' ' -f2-)
-REPO_NAME=$(basename "$MAIN_REPO")
-SCRIPT_PATH="${BASH_SOURCE[0]}"
 
 # =============================================================================
 # Colors & Style
@@ -396,6 +407,64 @@ fi
 # Helpers - TOUT sur stderr sauf le path final
 # =============================================================================
 
+# =============================================================================
+# Config
+# =============================================================================
+
+WT_CONFIG_FILE="${WT_CONFIG_FILE:-${HOME}/.config/wt/config}"
+
+load_config() {
+  if [[ -f "$WT_CONFIG_FILE" ]]; then
+    source "$WT_CONFIG_FILE"
+  fi
+}
+
+save_config_value() {
+  local key="$1"
+  local value="$2"
+  local config_dir
+  config_dir=$(dirname "$WT_CONFIG_FILE")
+
+  # Create config dir if needed
+  mkdir -p "$config_dir"
+
+  # Create file with header if it doesn't exist
+  if [[ ! -f "$WT_CONFIG_FILE" ]]; then
+    cat > "$WT_CONFIG_FILE" << 'WTEOF'
+# wt — user configuration
+# Edit manually or via: wt > ⚙ Settings
+WTEOF
+  fi
+
+  # Update or append the key
+  local tmp_file="${WT_CONFIG_FILE}.tmp"
+  if grep -q "^${key}=" "$WT_CONFIG_FILE" 2>/dev/null; then
+    # Replace existing key using awk (safe with special chars in value)
+    awk -v k="$key" -v v="$value" \
+      'BEGIN{FS="="; OFS="="} /^[[:space:]]*#/{print; next} $1==k{print k"="v; next} {print}' \
+      "$WT_CONFIG_FILE" > "$tmp_file" && mv "$tmp_file" "$WT_CONFIG_FILE"
+  else
+    echo "${key}=${value}" >> "$WT_CONFIG_FILE"
+  fi
+}
+
+get_config_value() {
+  local key="$1"
+  local default="$2"
+  local value
+  value=$(grep "^${key}=" "$WT_CONFIG_FILE" 2>/dev/null | cut -d= -f2-)
+  echo "${value:-$default}"
+}
+
+get_worktree_base_dir() {
+  if [[ -n "${WT_WORKTREE_DIR:-}" ]]; then
+    # Expand ~ if present
+    echo "${WT_WORKTREE_DIR/#\~/$HOME}"
+  else
+    echo "$(dirname "$MAIN_REPO")"
+  fi
+}
+
 has_fzf() {
   command -v fzf &> /dev/null
 }
@@ -409,6 +478,13 @@ has_claude() {
 }
 
 get_editor() {
+  # Config takes priority
+  local configured="${WT_EDITOR:-}"
+  if [[ -n "$configured" ]]; then
+    echo "$configured"
+    return
+  fi
+  # Auto-detect
   if command -v cursor &>/dev/null; then echo "cursor"
   elif command -v code &>/dev/null; then echo "code"
   elif [[ -n "$EDITOR" ]]; then echo "$EDITOR"
@@ -504,7 +580,7 @@ get_platform_name() {
 cli_pr_list() {
   local platform=$(detect_platform)
   if [[ "$platform" == "gitlab" ]]; then
-    glab mr list --per-page 20 --output json 2>/dev/null | \
+    glab mr list --per-page "${WT_LIST_LIMIT:-20}" --output json 2>/dev/null | \
       /usr/bin/jq -r '.[] |
         (if .draft then "\u001b[2m[draft]\u001b[0m"
          elif .head_pipeline == null then "\u001b[2m[--]\u001b[0m"
@@ -513,7 +589,7 @@ cli_pr_list() {
          else "\u001b[33m[..]\u001b[0m" end) as $ci |
         "#\(.iid)\t\($ci)  \t\(.title[0:50])\t\u001b[2m@\(.author.username)\u001b[0m\t\(.source_branch)"'
   else
-    gh pr list --json number,title,headRefName,author,reviewDecision,statusCheckRollup,isDraft 2>/dev/null | \
+    gh pr list --limit "${WT_LIST_LIMIT:-20}" --json number,title,headRefName,author,reviewDecision,statusCheckRollup,isDraft 2>/dev/null | \
       /usr/bin/jq -r '.[] |
         (if .isDraft then "\u001b[2m[draft]\u001b[0m"
          elif (.statusCheckRollup | length) == 0 then "\u001b[2m[--]\u001b[0m"
@@ -559,12 +635,12 @@ cli_pr_diff_stat() {
 cli_issue_list() {
   local platform=$(detect_platform)
   if [[ "$platform" == "gitlab" ]]; then
-    glab issue list --per-page 20 --output json 2>/dev/null | \
+    glab issue list --per-page "${WT_LIST_LIMIT:-20}" --output json 2>/dev/null | \
       /usr/bin/jq -r '.[] |
         (if (.labels | length) > 0 then (.labels | join(","))[0:15] else "-" end) as $labels |
         "#\(.iid)\t\(.title[0:50])\t@\(.author.username)\t\($labels)"'
   else
-    gh issue list --limit 20 --json number,title,author,labels,state 2>/dev/null | \
+    gh issue list --limit "${WT_LIST_LIMIT:-20}" --json number,title,author,labels,state 2>/dev/null | \
       /usr/bin/jq -r '.[] |
         (if (.labels | length) > 0 then (.labels | map(.name) | join(","))[0:15] else "-" end) as $labels |
         "#\(.number)\t\(.title[0:50])\t@\(.author.login)\t\($labels)"'
@@ -1112,6 +1188,16 @@ select_claude_mode() {
   local context_type="$1"  # pr-review, pr-work, issue-work
   local context_num="$2"
 
+  # If a default mode is configured, bypass the picker
+  if [[ -n "${WT_CLAUDE_MODE:-}" ]]; then
+    case "$WT_CLAUDE_MODE" in
+      forced|ask|plan)
+        echo "$WT_CLAUDE_MODE"
+        return
+        ;;
+    esac
+  fi
+
   local title
   case "$context_type" in
     "pr-review") title="PR #$context_num review" ;;
@@ -1200,7 +1286,7 @@ create_from_current() {
   local sanitized=$(echo "$current_branch" | sed 's|/|-|g')
   local worktree_name="${REPO_NAME}-${sanitized}-copy-${timestamp}"
   # Toujours créer à côté du repo PRINCIPAL
-  local worktree_path="$(dirname "$MAIN_REPO")/${worktree_name}"
+  local worktree_path="$(get_worktree_base_dir)/${worktree_name}"
   local new_branch="temp/${sanitized}-${timestamp}"
 
   msg "Creating worktree..."
@@ -1217,8 +1303,10 @@ create_from_current() {
 
 # Créer un worktree à partir d'une branche
 create_from_branch() {
-  msg "Fetching branches..."
-  git fetch --all --prune >/dev/null 2>&1
+  if [[ "${WT_AUTO_FETCH:-true}" != "false" ]]; then
+    msg "Fetching branches..."
+    git fetch --all --prune >/dev/null 2>&1
+  fi
 
   local branch_name
   local branch_header="${C_BOLD}Select branch${C_RESET}  ${C_DIM}Enter select · Esc cancel${C_RESET}"
@@ -1239,7 +1327,7 @@ create_from_branch() {
 
   local sanitized=$(echo "$branch_name" | sed 's|^origin/||' | sed 's|/|-|g')
   # Toujours créer à côté du repo PRINCIPAL
-  local worktree_path="$(dirname "$MAIN_REPO")/${REPO_NAME}-${sanitized}"
+  local worktree_path="$(get_worktree_base_dir)/${REPO_NAME}-${sanitized}"
 
   msg "Creating worktree..."
 
@@ -1265,8 +1353,10 @@ create_new_branch() {
   fi
 
   # 2. Sélectionner branche de base
-  msg "Fetching branches..."
-  git fetch --all --prune >/dev/null 2>&1
+  if [[ "${WT_AUTO_FETCH:-true}" != "false" ]]; then
+    msg "Fetching branches..."
+    git fetch --all --prune >/dev/null 2>&1
+  fi
 
   local current_branch=$(git branch --show-current 2>/dev/null || echo "HEAD")
   local base_header="${C_BOLD}Base branch${C_RESET}  ${C_DIM}Enter select · Esc use $current_branch${C_RESET}"
@@ -1299,7 +1389,7 @@ create_new_branch() {
 
   # 4. Créer le worktree
   local sanitized=$(echo "$branch_name" | sed 's|/|-|g')
-  local worktree_path="$(dirname "$MAIN_REPO")/${REPO_NAME}-${sanitized}"
+  local worktree_path="$(get_worktree_base_dir)/${REPO_NAME}-${sanitized}"
 
   msg "Creating worktree with new branch '$branch_name' from '$base_branch'..."
 
@@ -1318,7 +1408,7 @@ create_from_pr() {
   local pr_branch="$1"
   local sanitized=$(echo "$pr_branch" | sed 's|^origin/||' | sed 's|/|-|g')
   # Toujours créer à côté du repo PRINCIPAL, avec préfixe "reviewing"
-  local worktree_path="$(dirname "$MAIN_REPO")/${REPO_NAME}-reviewing-${sanitized}"
+  local worktree_path="$(get_worktree_base_dir)/${REPO_NAME}-reviewing-${sanitized}"
 
   # Check if worktree already exists at this path
   if [[ -d "$worktree_path" ]]; then
@@ -1370,7 +1460,8 @@ create_from_issue() {
 
   # Créer un slug à partir du titre
   local slug=$(echo "$issue_title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-30)
-  local base_branch_name="feature/${issue_num}-${slug}"
+  local _feature_prefix="${WT_FEATURE_PREFIX:-feature/}"
+  local base_branch_name="${_feature_prefix}${issue_num}-${slug}"
   local branch_name="$base_branch_name"
 
   # Incrémenter si la branche existe déjà
@@ -1382,7 +1473,7 @@ create_from_issue() {
   done
 
   local sanitized=$(echo "$branch_name" | sed 's|/|-|g')
-  local worktree_path="$(dirname "$MAIN_REPO")/${REPO_NAME}-${sanitized}"
+  local worktree_path="$(get_worktree_base_dir)/${REPO_NAME}-${sanitized}"
 
   # Récupérer la branche par défaut du repo
   local default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
@@ -2721,6 +2812,508 @@ action_delete_worktrees() {
 }
 
 # =============================================================================
+# First-time Preferences Wizard
+# =============================================================================
+
+run_preferences_wizard() {
+  msg ""
+  msg "  ${C_BOLD}Let's configure wt${C_RESET} in 2 quick steps."
+  msg "  ${C_DIM}(Press ^S to skip any step)${C_RESET}"
+  msg ""
+
+  # Detect available editors
+  local available_editors=()
+  command -v cursor &>/dev/null && available_editors+=("cursor")
+  command -v code &>/dev/null && available_editors+=("code")
+  command -v nvim &>/dev/null && available_editors+=("nvim")
+  command -v vim &>/dev/null && available_editors+=("vim")
+  # Always offer custom
+  available_editors+=("custom...")
+
+  # Step 1: IDE
+  local header_step1="${C_BOLD}Step 1/2 — Preferred editor${C_RESET}  ${C_DIM}^S skip${C_RESET}"
+  local ide_result
+  ide_result=$(printf '%s\n' "${available_editors[@]}" | \
+    fzf --height=40% \
+        --layout=reverse \
+        --border \
+        --ansi \
+        --header="$header_step1" \
+        --expect=ctrl-s \
+        --preview='
+          case {} in
+            cursor*) echo "Cursor AI Editor"
+                     echo ""
+                     echo "AI-powered fork of VS Code"
+                     echo "from Cursor.sh"
+                     ;;
+            code*)   echo "Visual Studio Code"
+                     echo ""
+                     echo "Microsoft'"'"'s open-source editor"
+                     ;;
+            nvim*)   echo "Neovim"
+                     echo ""
+                     echo "Hyperextensible Vim-based editor"
+                     ;;
+            vim*)    echo "Vim"
+                     echo ""
+                     echo "Classic terminal editor"
+                     ;;
+            custom*) echo "Custom editor"
+                     echo ""
+                     echo "Enter your editor command"
+                     echo "(e.g. emacs, nano, subl)"
+                     ;;
+          esac
+          echo ""
+          echo "Used when pressing Ctrl+E"
+          echo "in the worktree menu."
+        ' \
+        --preview-window=right:40%)
+
+  local ide_key ide_choice
+  ide_key=$(echo "$ide_result" | head -1)
+  ide_choice=$(echo "$ide_result" | tail -n +2)
+  # Strip ANSI codes and take first word
+  ide_choice=$(echo "$ide_choice" | sed 's/\x1b\[[0-9;]*m//g' | awk '{print $1}')
+
+  local selected_editor=""
+  if [[ "$ide_key" != "ctrl-s" && -n "$ide_choice" ]]; then
+    if [[ "$ide_choice" == "custom..." ]]; then
+      msg ""
+      msg "Enter your editor command (e.g. emacs, nano, subl):"
+      read -r selected_editor </dev/tty
+    else
+      selected_editor="$ide_choice"
+    fi
+  fi
+
+  # Step 2: Platform
+  local header_step2="${C_BOLD}Step 2/2 — Git platform${C_RESET}  ${C_DIM}^S skip${C_RESET}"
+  local current_remote_guess="github"
+  local remote_url
+  remote_url=$(git -C "${MAIN_REPO:-$PWD}" remote get-url origin 2>/dev/null || echo "")
+  [[ "$remote_url" == *gitlab* ]] && current_remote_guess="gitlab"
+
+  local platform_result
+  platform_result=$(printf '%s\n' \
+    "auto" \
+    "github" \
+    "gitlab" | \
+    fzf --height=30% \
+        --layout=reverse \
+        --border \
+        --ansi \
+        --header="$header_step2" \
+        --expect=ctrl-s \
+        --preview="
+          case {} in
+            auto*)
+              echo 'auto (recommended)'
+              echo ''
+              echo 'Reads your git remote URL'
+              echo 'to detect GitHub vs GitLab.'
+              echo ''
+              echo \"Detected for this repo: $current_remote_guess\"
+              ;;
+            github*)
+              echo 'GitHub'
+              echo ''
+              echo 'Forces GitHub mode.'
+              echo 'Uses: gh CLI'
+              ;;
+            gitlab*)
+              echo 'GitLab'
+              echo ''
+              echo 'Forces GitLab mode.'
+              echo 'Uses: glab CLI'
+              ;;
+          esac
+        " \
+        --preview-window=right:40%)
+
+  local platform_key platform_choice
+  platform_key=$(echo "$platform_result" | head -1)
+  platform_choice=$(echo "$platform_result" | tail -n +2 | awk '{print $1}')
+
+  local selected_platform="auto"
+  if [[ "$platform_key" != "ctrl-s" && -n "$platform_choice" ]]; then
+    selected_platform="$platform_choice"
+  fi
+
+  # Write config file
+  mkdir -p "$(dirname "$WT_CONFIG_FILE")"
+  cat > "$WT_CONFIG_FILE" << WTEOF
+# wt — user configuration
+# Edit manually or via: wt > ⚙ Settings
+
+WT_EDITOR=${selected_editor}
+WT_PLATFORM=${selected_platform}
+WT_WORKTREE_DIR=
+WT_AUTO_CD=true
+WT_FEATURE_PREFIX=feature/
+WT_AUTO_FETCH=true
+WT_CLAUDE_MODE=
+WT_LIST_LIMIT=20
+WTEOF
+
+  # Source the new config
+  load_config
+
+  # Success screen
+  local editor_display="${selected_editor:-auto-detect}"
+  local editor_pad=$(( 17 - ${#editor_display} ))
+  local platform_pad=$(( 19 - ${#selected_platform} ))
+  [[ $editor_pad -lt 0 ]] && editor_pad=0
+  [[ $platform_pad -lt 0 ]] && platform_pad=0
+
+  msg ""
+  msg "  ╔══════════════════════════════════════╗"
+  msg "  ║  ${C_GREEN}✓${C_RESET}  wt is configured                ║"
+  msg "  ╠══════════════════════════════════════╣"
+  msg "  ║                                      ║"
+  msg "  ║  IDE         ${editor_display}$(printf '%*s' $editor_pad '')║"
+  msg "  ║  Platform    ${selected_platform}$(printf '%*s' $platform_pad '')║"
+  msg "  ║                                      ║"
+  msg "  ║  Config → ~/.config/wt/config        ║"
+  msg "  ║                                      ║"
+  msg "  ║  Tip: wt > ⚙ Settings to change      ║"
+  msg "  ║                                      ║"
+  msg "  ╚══════════════════════════════════════╝"
+  msg ""
+  msg "  Launching wt..."
+  msg ""
+  sleep 1
+}
+
+# =============================================================================
+# First-time Install Wizard
+# =============================================================================
+
+run_install_wizard() {
+  print_logo
+
+  # Detect what needs to be installed
+  local needs_symlink=false
+  local needs_rc=false
+  local install_dir="/usr/local/bin"
+  local script_path
+  script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+
+  if ! command -v wt-core &>/dev/null; then
+    needs_symlink=true
+    if [[ ! -d "/usr/local/bin" || ! -w "/usr/local/bin" ]]; then
+      install_dir="${HOME}/.local/bin"
+    fi
+  fi
+
+  local shell_name rc_file
+  shell_name=$(basename "$SHELL")
+  case "$shell_name" in
+    zsh)  rc_file="$HOME/.zshrc" ;;
+    bash) rc_file="$HOME/.bashrc" ;;
+    *)    rc_file="$HOME/.profile" ;;
+  esac
+
+  local init_line='command -v wt-core &>/dev/null && eval "$(wt-core --shell-init)"'
+  if ! grep -q "wt-core --shell-init" "$rc_file" 2>/dev/null; then
+    needs_rc=true
+  fi
+
+  # If nothing to install, skip to preferences
+  if [[ "$needs_symlink" == "false" && "$needs_rc" == "false" ]]; then
+    run_preferences_wizard
+    return
+  fi
+
+  # Build what-will-happen list
+  msg "  ${C_BOLD}wt${C_RESET} needs a quick one-time setup."
+  msg "  This will:"
+  msg ""
+  [[ "$needs_symlink" == "true" ]] && msg "    ${C_DIM}→${C_RESET} Create symlink  ${C_CYAN}${install_dir}/wt-core${C_RESET}"
+  [[ "$needs_rc" == "true" ]]      && msg "    ${C_DIM}→${C_RESET} Add init line   ${C_CYAN}${rc_file}${C_RESET}"
+  msg ""
+
+  local confirm_result
+  confirm_result=$(printf '%s\n' \
+    "Yes, set it up" \
+    "No, skip for now" | \
+    fzf --height=15% \
+        --layout=reverse \
+        --border \
+        --ansi \
+        --no-sort \
+        --header="${C_BOLD}Install now?${C_RESET}")
+
+  if [[ "$confirm_result" != "Yes"* ]]; then
+    msg ""
+    msg "  Skipping install. Run: ${C_CYAN}./wt.sh --setup${C_RESET} to install later."
+    msg ""
+    return 1
+  fi
+
+  # Perform installation
+  if [[ "$needs_symlink" == "true" ]]; then
+    mkdir -p "$install_dir"
+    ln -sf "$script_path" "${install_dir}/wt-core"
+    msg "  ${C_GREEN}✓${C_RESET} Created: ${install_dir}/wt-core"
+  fi
+
+  if [[ "$needs_rc" == "true" ]]; then
+    echo "" >> "$rc_file"
+    echo "# wt - Git Worktree Manager" >> "$rc_file"
+    echo "$init_line" >> "$rc_file"
+    msg "  ${C_GREEN}✓${C_RESET} Added init line to ${rc_file}"
+  fi
+
+  msg ""
+  msg "  ${C_BOLD}Installation complete!${C_RESET}"
+  msg "  Run ${C_CYAN}source ${rc_file}${C_RESET} to activate (or restart your terminal)."
+  msg ""
+  sleep 1
+
+  # Continue to preferences
+  run_preferences_wizard
+}
+
+# =============================================================================
+# Settings Menu
+# =============================================================================
+
+menu_settings() {
+  while true; do
+    # Read current values (live from variables, which were loaded from config)
+    local cur_editor="${WT_EDITOR:-$(get_editor) (auto)}"
+    local cur_platform="${WT_PLATFORM:-auto}"
+    local cur_worktree_dir="${WT_WORKTREE_DIR:-default}"
+    local cur_auto_cd="${WT_AUTO_CD:-true}"
+    local cur_feature_prefix="${WT_FEATURE_PREFIX:-feature/}"
+    local cur_auto_fetch="${WT_AUTO_FETCH:-true}"
+    local cur_claude_mode="${WT_CLAUDE_MODE:-prompt each time}"
+    local cur_list_limit="${WT_LIST_LIMIT:-20}"
+
+    local header="${C_BOLD}⚙ Settings${C_RESET}  ${C_DIM}Enter to edit · ^R reset${C_RESET}"
+
+    local options
+    options=$(printf '%s\n' \
+      "IDE              ${C_CYAN}${cur_editor}${C_RESET}" \
+      "Platform         ${C_CYAN}${cur_platform}${C_RESET}" \
+      "Worktree dir     ${C_CYAN}${cur_worktree_dir}${C_RESET}" \
+      "Auto-CD          ${C_CYAN}${cur_auto_cd}${C_RESET}" \
+      "Feature prefix   ${C_CYAN}${cur_feature_prefix}${C_RESET}" \
+      "Auto-fetch       ${C_CYAN}${cur_auto_fetch}${C_RESET}" \
+      "Claude mode      ${C_CYAN}${cur_claude_mode}${C_RESET}" \
+      "PR/Issue limit   ${C_CYAN}${cur_list_limit}${C_RESET}" \
+      "──────────────────────────────────────" \
+      "↺ Reset to defaults")
+
+    local result
+    result=$(echo "$options" | \
+      fzf --height=60% \
+          --layout=reverse \
+          --border \
+          --ansi \
+          --header="$header" \
+          --expect=ctrl-r \
+          --preview='
+            case {} in
+              IDE*)
+                echo "Preferred code editor"
+                echo ""
+                echo "Used when pressing Ctrl+E"
+                echo "in the main worktree menu."
+                echo ""
+                echo "auto = detect cursor > code > $EDITOR > vim"
+                ;;
+              Platform*)
+                echo "Git hosting platform"
+                echo ""
+                echo "auto   = detect from remote URL"
+                echo "github = force GitHub (gh CLI)"
+                echo "gitlab = force GitLab (glab CLI)"
+                ;;
+              Worktree*)
+                echo "Base directory for new worktrees"
+                echo ""
+                echo "default = created next to main repo"
+                echo "custom  = any absolute path, e.g. ~/worktrees"
+                ;;
+              Auto-CD*)
+                echo "Auto-navigate after worktree selection"
+                echo ""
+                echo "true  = cd to worktree on selection"
+                echo "false = no automatic cd"
+                ;;
+              Feature*)
+                echo "Branch prefix for issue worktrees"
+                echo ""
+                echo "Used when creating a worktree"
+                echo "from a GitHub/GitLab issue."
+                echo ""
+                echo "Examples: feature/ feat/ task/"
+                ;;
+              Auto-fetch*)
+                echo "Fetch before branch operations"
+                echo ""
+                echo "true  = git fetch --all before listing branches"
+                echo "false = use cached branch list (faster offline)"
+                ;;
+              Claude*)
+                echo "Default Claude launch mode"
+                echo ""
+                echo "prompt each time = show picker (default)"
+                echo "forced  = --dangerously-skip-permissions"
+                echo "ask     = interactive mode"
+                echo "plan    = --permission-mode=plan"
+                ;;
+              PR*)
+                echo "Max items in PR and issue lists"
+                echo ""
+                echo "Higher = more results, slower API call"
+                echo "Lower  = fewer results, faster"
+                ;;
+              *Reset*)
+                echo "Reset all settings to defaults"
+                echo ""
+                echo "Overwrites ~/.config/wt/config"
+                echo "with default values and runs wizard."
+                ;;
+            esac
+          ' \
+          --preview-window=right:45%)
+
+    local key selected
+    key=$(echo "$result" | head -1)
+    selected=$(echo "$result" | tail -n +2)
+    # Strip ANSI and take first word to get the setting name
+    selected=$(echo "$selected" | sed 's/\x1b\[[0-9;]*m//g' | awk '{print $1}')
+
+    # Ctrl+R or ↺ Reset to defaults
+    if [[ "$key" == "ctrl-r" ]] || [[ "$selected" == "↺" ]]; then
+      local confirm
+      confirm=$(printf '%s\n' "Yes, reset everything" "No, cancel" | \
+        fzf --height=15% --layout=reverse --border --ansi \
+            --header="${C_BOLD}Reset all settings to defaults?${C_RESET}")
+      if [[ "$confirm" == "Yes"* ]]; then
+        rm -f "$WT_CONFIG_FILE"
+        run_preferences_wizard
+        load_config
+        msg_success "Settings reset to defaults"
+      fi
+      continue
+    fi
+
+    # Exit on empty selection (Escape)
+    [[ -z "$selected" ]] && return 0
+
+    # Edit each setting based on first word of selection
+    case "$selected" in
+      IDE)
+        local editors=()
+        command -v cursor &>/dev/null && editors+=("cursor")
+        command -v code &>/dev/null && editors+=("code")
+        command -v nvim &>/dev/null && editors+=("nvim")
+        command -v vim &>/dev/null && editors+=("vim")
+        editors+=("custom...")
+        local choice
+        choice=$(printf '%s\n' "${editors[@]}" | \
+          fzf --height=30% --layout=reverse --border --ansi \
+              --header="${C_BOLD}Select IDE${C_RESET}")
+        if [[ -n "$choice" ]]; then
+          if [[ "$choice" == "custom..." ]]; then
+            msg "Enter editor command:"
+            read -r choice </dev/tty
+          fi
+          if [[ -n "$choice" ]]; then
+            save_config_value "WT_EDITOR" "$choice"
+            export WT_EDITOR="$choice"
+          fi
+        fi
+        ;;
+      Platform)
+        local choice
+        choice=$(printf '%s\n' "auto" "github" "gitlab" | \
+          fzf --height=20% --layout=reverse --border --ansi \
+              --header="${C_BOLD}Select platform${C_RESET}")
+        if [[ -n "$choice" ]]; then
+          save_config_value "WT_PLATFORM" "$choice"
+          export WT_PLATFORM="$choice"
+          _WT_PLATFORM="$choice"
+        fi
+        ;;
+      Worktree)
+        msg "Enter base directory for new worktrees (empty = default):"
+        local dir
+        read -r dir </dev/tty
+        save_config_value "WT_WORKTREE_DIR" "$dir"
+        export WT_WORKTREE_DIR="$dir"
+        ;;
+      Auto-CD)
+        local choice
+        choice=$(printf '%s\n' "true" "false" | \
+          fzf --height=15% --layout=reverse --border --ansi \
+              --header="${C_BOLD}Auto-CD${C_RESET}")
+        if [[ -n "$choice" ]]; then
+          save_config_value "WT_AUTO_CD" "$choice"
+          export WT_AUTO_CD="$choice"
+        fi
+        ;;
+      Feature)
+        msg "Enter feature branch prefix (e.g. feature/, feat/, task/):"
+        local prefix
+        read -r prefix </dev/tty
+        if [[ -n "$prefix" ]]; then
+          save_config_value "WT_FEATURE_PREFIX" "$prefix"
+          export WT_FEATURE_PREFIX="$prefix"
+        fi
+        ;;
+      Auto-fetch)
+        local choice
+        choice=$(printf '%s\n' "true" "false" | \
+          fzf --height=15% --layout=reverse --border --ansi \
+              --header="${C_BOLD}Auto-fetch${C_RESET}")
+        if [[ -n "$choice" ]]; then
+          save_config_value "WT_AUTO_FETCH" "$choice"
+          export WT_AUTO_FETCH="$choice"
+        fi
+        ;;
+      Claude)
+        local choice
+        choice=$(printf '%s\n' \
+          "prompt each time" \
+          "forced" \
+          "ask" \
+          "plan" | \
+          fzf --height=25% --layout=reverse --border --ansi \
+              --header="${C_BOLD}Claude mode${C_RESET}")
+        if [[ -n "$choice" ]]; then
+          local mode_val=""
+          case "$choice" in
+            "forced"*) mode_val="forced" ;;
+            "ask"*)    mode_val="ask" ;;
+            "plan"*)   mode_val="plan" ;;
+          esac
+          save_config_value "WT_CLAUDE_MODE" "$mode_val"
+          export WT_CLAUDE_MODE="$mode_val"
+        fi
+        ;;
+      PR/Issue)
+        msg "Enter max items in lists (default: 20):"
+        local limit
+        read -r limit </dev/tty
+        if [[ "$limit" =~ ^[0-9]+$ ]]; then
+          save_config_value "WT_LIST_LIMIT" "$limit"
+          export WT_LIST_LIMIT="$limit"
+        fi
+        ;;
+      "──────────────────────────────────────")
+        continue
+        ;;
+    esac
+  done
+}
+
+# =============================================================================
 # Menu principal
 # =============================================================================
 
@@ -2747,6 +3340,7 @@ main_menu() {
     if [[ "$secondary_count" -ge 1 ]]; then
       actions+=$'\n'"${C_DIM}✕${C_RESET} Delete worktree(s)"
     fi
+    actions+=$'\n'"${C_DIM}⚙${C_RESET} Settings"
     actions+=$'\n'"${C_DIM}◀${C_RESET} Quit"
 
     local menu="${worktrees_formatted}${actions}"
@@ -2769,7 +3363,7 @@ main_menu() {
               exit 0
             fi
             # Clean line (remove icon only for actions, not worktrees)
-            if [[ \"\$line\" == \"＋\"* || \"\$line\" == \"⬡\"* || \"\$line\" == \"✕\"* || \"\$line\" == \"◀\"* ]]; then
+            if [[ \"\$line\" == \"＋\"* || \"\$line\" == \"⬡\"* || \"\$line\" == \"✕\"* || \"\$line\" == \"◀\"* || \"\$line\" == \"⚙\"* ]]; then
               clean_line=\$(echo \"\$line\" | sed -E 's/^[^A-Za-z]*//')
             else
               clean_line=\"\$line\"
@@ -2808,6 +3402,16 @@ main_menu() {
               else
                 echo 'No stashes found'
               fi
+            elif [[ \"\$clean_line\" == \"Settings\"* ]]; then
+              echo '> Manage wt preferences'
+              echo ''
+              echo 'Configure:'
+              echo '  IDE, Platform, Worktree dir'
+              echo '  Auto-CD, Feature prefix'
+              echo '  Auto-fetch, Claude mode'
+              echo '  PR/Issue limit'
+              echo ''
+              echo 'Config: ~/.config/wt/config'
             else
               path=\$(echo \"\$line\" | /usr/bin/awk '{print \$2}' | /usr/bin/sed \"s|^~|\$HOME|\")
               if [[ -d \"\$path\" ]]; then
@@ -2936,7 +3540,7 @@ main_menu() {
 
     # Clean action lines (remove icon only for actions, not worktrees)
     local clean_selected
-    if [[ "$selected" == "＋"* || "$selected" == "⬡"* || "$selected" == "✕"* || "$selected" == "◀"* ]]; then
+    if [[ "$selected" == "＋"* || "$selected" == "⬡"* || "$selected" == "✕"* || "$selected" == "◀"* || "$selected" == "⚙"* ]]; then
       clean_selected=$(echo "$selected" | sed -E 's/^[^A-Za-z]*//')
     else
       clean_selected="$selected"
@@ -2953,6 +3557,9 @@ main_menu() {
         ;;
       "Manage stashes"*)
         menu_stash
+        ;;
+      "Settings"*)
+        menu_settings
         ;;
       "Delete"*)
         local path
@@ -2980,6 +3587,16 @@ main_menu() {
 # =============================================================================
 # Point d'entrée
 # =============================================================================
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+
+load_config
+
+if [[ "$1" == "--wizard" ]]; then
+  rm -f "$WT_CONFIG_FILE"
+  run_preferences_wizard
+  exit 0
+fi
 
 if [[ "$1" == "--pr-preview" ]]; then
   pr_preview "$2"
@@ -3056,6 +3673,15 @@ if [[ -n "$1" && "$1" != "--"* ]]; then
   exit 1
 fi
 
+# First-time setup wizard
+if [[ -z "$1" ]] && [[ -t 2 ]]; then
+  if ! command -v wt-core &>/dev/null; then
+    run_install_wizard || true
+  elif [[ ! -f "$WT_CONFIG_FILE" ]]; then
+    run_preferences_wizard
+  fi
+fi
+
 # Run main menu and capture result
 result=$(main_menu)
 
@@ -3063,3 +3689,5 @@ if [[ -n "$result" ]]; then
   echo "$result"
 fi
 
+
+fi
