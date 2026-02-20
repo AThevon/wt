@@ -3488,7 +3488,7 @@ main_menu() {
     # Handle keyboard shortcuts
     case "$key" in
       ctrl-e)
-        if [[ -n "$selected" && "$selected" != "───"* && "$selected" != "＋"* && "$selected" != "⬡"* && "$selected" != "✕"* && "$selected" != "◀"* ]]; then
+        if [[ -n "$selected" && "$selected" != "───"* && "$selected" != "›"* && "$selected" != "◇"* && "$selected" != "×"* && "$selected" != "‹"* && "$selected" != "◦"* ]]; then
           local path=$(echo "$selected" | awk '{print $2}' | sed "s|^~|$HOME|")
           if [[ -d "$path" ]]; then
             local editor=$(get_editor)
@@ -3548,7 +3548,7 @@ main_menu() {
 
     # Clean action lines (remove icon only for actions, not worktrees)
     local clean_selected
-    if [[ "$selected" == "＋"* || "$selected" == "⬡"* || "$selected" == "✕"* || "$selected" == "◀"* || "$selected" == "⚙"* ]]; then
+    if [[ "$selected" == "›"* || "$selected" == "◇"* || "$selected" == "×"* || "$selected" == "‹"* || "$selected" == "◦"* ]]; then
       clean_selected=$(echo "$selected" | sed -E 's/^[^A-Za-z]*//')
     else
       clean_selected="$selected"
