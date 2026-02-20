@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.8.1"
+VERSION="1.9.0"
 
 # =============================================================================
 # Options de ligne de commande
@@ -589,15 +589,19 @@ cli_pr_list() {
          else "\u001b[33m[..]\u001b[0m" end) as $ci |
         "#\(.iid)\t\($ci)  \t\(.title[0:50])\t\u001b[2m@\(.author.username)\u001b[0m\t\(.source_branch)"'
   else
-    gh pr list --limit "${WT_LIST_LIMIT:-20}" --json number,title,headRefName,author,reviewDecision,statusCheckRollup,isDraft 2>/dev/null | \
-      /usr/bin/jq -r '.[] |
+    local gh_user
+    gh_user=$(gh api user --jq .login 2>/dev/null)
+    gh pr list --limit "${WT_LIST_LIMIT:-20}" --json number,title,headRefName,author,reviewDecision,statusCheckRollup,isDraft,reviewRequests 2>/dev/null | \
+      /usr/bin/jq -r --arg me "$gh_user" '.[] |
         (if .isDraft then "\u001b[2m[draft]\u001b[0m"
          elif (.statusCheckRollup | length) == 0 then "\u001b[2m[--]\u001b[0m"
          elif ([.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length) > 0 then "\u001b[31m[fail]\u001b[0m"
          elif ([.statusCheckRollup[] | select(.status == "COMPLETED")] | length) < (.statusCheckRollup | length) then "\u001b[33m[..]\u001b[0m"
          else "\u001b[32m[ok]\u001b[0m" end) as $ci |
+        (([.reviewRequests[] | select(.login == $me)] | length) > 0) as $needs_my_review |
         (if .reviewDecision == "APPROVED" then "\u001b[32m✓\u001b[0m"
          elif .reviewDecision == "CHANGES_REQUESTED" then "\u001b[31m✗\u001b[0m"
+         elif $needs_my_review then "\u001b[35m◀\u001b[0m"
          else " " end) as $review |
         "#\(.number)\t\($ci) \($review)\t\(.title[0:50])\t\u001b[2m@\(.author.login)\u001b[0m\t\(.headRefName)"'
   fi
@@ -1106,12 +1110,16 @@ format_worktree_line() {
 
   # Status indicator at the beginning
   local status_icon
+  local dir_name=$(basename "$wt_path")
   if [[ "$branch" == "$default_branch" ]]; then
     # Main branch - neutral
     status_icon="${C_DIM}●${C_RESET}"
   elif is_branch_merged "$branch"; then
     # Merged - green checkmark
     status_icon="${C_GREEN}✓${C_RESET}"
+  elif [[ "$dir_name" == *"-reviewing-"* ]]; then
+    # Review worktree - magenta eye
+    status_icon="${C_MAGENTA}◎${C_RESET}"
   else
     # Not merged - orange circle (in progress)
     status_icon="${C_ORANGE}○${C_RESET}"
@@ -3335,13 +3343,13 @@ main_menu() {
     # Construire les actions
     local actions=""
     actions+=$'\n'""  # Ligne vide comme séparateur
-    actions+=$'\n'"${C_DIM}＋${C_RESET} Create a worktree"
-    actions+=$'\n'"${C_DIM}⬡${C_RESET} Manage stashes"
+    actions+=$'\n'"${C_DIM}›${C_RESET} Create a worktree"
+    actions+=$'\n'"${C_DIM}◇${C_RESET} Manage stashes"
     if [[ "$secondary_count" -ge 1 ]]; then
-      actions+=$'\n'"${C_DIM}✕${C_RESET} Delete worktree(s)"
+      actions+=$'\n'"${C_DIM}×${C_RESET} Delete worktree(s)"
     fi
-    actions+=$'\n'"${C_DIM}⚙${C_RESET} Settings"
-    actions+=$'\n'"${C_DIM}◀${C_RESET} Quit"
+    actions+=$'\n'"${C_DIM}◦${C_RESET} Settings"
+    actions+=$'\n'"${C_DIM}‹${C_RESET} Quit"
 
     local menu="${worktrees_formatted}${actions}"
 
