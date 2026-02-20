@@ -3371,7 +3371,7 @@ main_menu() {
               exit 0
             fi
             # Clean line (remove icon only for actions, not worktrees)
-            if [[ \"\$line\" == \"＋\"* || \"\$line\" == \"⬡\"* || \"\$line\" == \"✕\"* || \"\$line\" == \"◀\"* || \"\$line\" == \"⚙\"* ]]; then
+            if [[ \"\$line\" == \"›\"* || \"\$line\" == \"◇\"* || \"\$line\" == \"×\"* || \"\$line\" == \"‹\"* || \"\$line\" == \"◦\"* ]]; then
               clean_line=\$(echo \"\$line\" | sed -E 's/^[^A-Za-z]*//')
             else
               clean_line=\"\$line\"
