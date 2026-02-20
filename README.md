@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.8.0-orange" alt="Version" />
+  <img src="https://img.shields.io/badge/version-1.9.0-orange" alt="Version" />
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License" />
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey" alt="Platform" />
 </p>
@@ -92,20 +92,20 @@ wt .        # Main worktree
  | |/ |/ / / /         ((__.-'((___..-'' \__.'
  |__/|__/ /_/
 
-  Git Worktree Manager v1.8.0
+  Git Worktree Manager v1.9.0
 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ myapp │ ^E: editor │ ^N: new │ ^P: PRs │ ^G: issues │ ^D: delete        │
 ├─────────────────────────────────────────────────────────────────────────┤
-│ > ~/projects/myapp                                          [main]      │
-│   ~/projects/myapp-feature-auth                          *  [feature]   │
-│   ~/projects/myapp-reviewing-fix-bug                        [fix/bug]   │
+│ ● ~/projects/myapp                                          [main]      │
+│ ○ ~/projects/myapp-feature-auth                          *  [feature]   │
+│ ◎ ~/projects/myapp-reviewing-fix-bug                        [fix/bug]   │
 │ -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-     │
-│   Create a worktree                                                     │
-│   Manage stashes                                                        │
-│   Delete worktree(s)                                                    │
-│ ⚙ Settings                                                              │
-│   Quit                                                                  │
+│ › Create a worktree                                                     │
+│ ◇ Manage stashes                                                        │
+│ × Delete worktree(s)                                                    │
+│ ◦ Settings                                                              │
+│ ‹ Quit                                                                  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -202,7 +202,7 @@ The stash menu provides a complete workflow with rich information:
 |----|--------|---------|
 | `[ok]` | `✓` | Passed / Approved |
 | `[fail]` | `✗` | Failed / Changes requested |
-| `[..]` | | Running |
+| `[..]` | `◀` | Running / Needs **your** review |
 | `[draft]` | | Draft PR |
 
 ## Dependencies
