@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.9.3"
+VERSION="1.9.4"
 
 # =============================================================================
 # Options de ligne de commande
@@ -1414,6 +1414,7 @@ create_new_branch() {
 # Créer un worktree depuis une PR
 create_from_pr() {
   local pr_branch="$1"
+  local pr_num="$2"
   local sanitized=$(echo "$pr_branch" | sed 's|^origin/||' | sed 's|/|-|g')
   # Toujours créer à côté du repo PRINCIPAL, avec préfixe "reviewing"
   local worktree_path="$(get_worktree_base_dir)/${REPO_NAME}-reviewing-${sanitized}"
@@ -1435,20 +1436,19 @@ create_from_pr() {
   fi
 
   msg "Fetching branch..."
-  if ! git -C "$MAIN_REPO" fetch origin "$pr_branch" >/dev/null 2>&1; then
-    msg "Error fetching branch: $pr_branch"
-    return 1
-  fi
+  if git -C "$MAIN_REPO" fetch origin "$pr_branch" >/dev/null 2>&1; then
+    # Branch exists on origin — standard case
+    msg "Creating worktree..."
+    local git_output
+    git_output=$(git -C "$MAIN_REPO" worktree add -B "$pr_branch" "$worktree_path" "origin/$pr_branch" 2>&1)
+    local ret=$?
 
-  msg "Creating worktree..."
-  local git_output
-  git_output=$(git -C "$MAIN_REPO" worktree add -B "$pr_branch" "$worktree_path" "origin/$pr_branch" 2>&1)
-  local ret=$?
+    if [[ $ret -eq 0 ]]; then
+      msg "Worktree created: $worktree_path"
+      echo "$worktree_path"
+      return 0
+    fi
 
-  if [[ $ret -eq 0 ]]; then
-    msg "Worktree created: $worktree_path"
-    echo "$worktree_path"
-  else
     # If failed because branch is already checked out, find and use that worktree
     if echo "$git_output" | grep -q "already used by worktree"; then
       existing_wt=$(echo "$git_output" | grep -o "at '.*'" | sed "s/at '//;s/'//")
@@ -1458,6 +1458,40 @@ create_from_pr() {
         return 0
       fi
     fi
+    msg "Error creating worktree:"
+    msg "$git_output"
+    return 1
+  fi
+
+  # Branch not on origin — likely a fork-based PR
+  if [[ -z "$pr_num" ]]; then
+    msg "Error: branch '$pr_branch' not found on origin and no PR number provided"
+    return 1
+  fi
+
+  msg "Branch not on origin, fetching from fork (PR #$pr_num)..."
+  local fork_url
+  fork_url=$(gh pr view "$pr_num" --json headRepository --jq '.headRepository.url' 2>/dev/null)
+
+  if [[ -z "$fork_url" ]]; then
+    msg "Error: could not resolve fork URL for PR #$pr_num"
+    return 1
+  fi
+
+  # Fetch the fork branch into a local branch
+  if ! git -C "$MAIN_REPO" fetch "$fork_url" "$pr_branch:$pr_branch" >/dev/null 2>&1; then
+    msg "Error fetching branch '$pr_branch' from fork"
+    return 1
+  fi
+
+  msg "Creating worktree..."
+  local git_output
+  git_output=$(git -C "$MAIN_REPO" worktree add "$worktree_path" "$pr_branch" 2>&1)
+
+  if [[ $? -eq 0 ]]; then
+    msg "Worktree created: $worktree_path"
+    echo "$worktree_path"
+  else
     msg "Error creating worktree:"
     msg "$git_output"
     return 1
@@ -1651,7 +1685,7 @@ menu_review_pr() {
 
       # Create worktree
       local wt_path
-      wt_path=$(create_from_pr "$pr_branch")
+      wt_path=$(create_from_pr "$pr_branch" "$pr_num")
       local ret=$?
 
       if [[ $ret -eq 0 && -n "$wt_path" ]]; then
