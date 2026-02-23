@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.9.2"
+VERSION="1.9.3"
 
 # =============================================================================
 # Options de ligne de commande
@@ -1435,11 +1435,14 @@ create_from_pr() {
   fi
 
   msg "Fetching branch..."
-  git -C "$MAIN_REPO" fetch origin "$pr_branch" >/dev/null 2>&1
+  if ! git -C "$MAIN_REPO" fetch origin "$pr_branch" >/dev/null 2>&1; then
+    msg "Error fetching branch: $pr_branch"
+    return 1
+  fi
 
   msg "Creating worktree..."
   local git_output
-  git_output=$(git -C "$MAIN_REPO" worktree add "$worktree_path" "$pr_branch" 2>&1)
+  git_output=$(git -C "$MAIN_REPO" worktree add -B "$pr_branch" "$worktree_path" "origin/$pr_branch" 2>&1)
   local ret=$?
 
   if [[ $ret -eq 0 ]]; then
