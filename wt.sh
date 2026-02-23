@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.9.4"
+VERSION="1.9.5"
 
 # =============================================================================
 # Options de ligne de commande
@@ -1463,24 +1463,15 @@ create_from_pr() {
     return 1
   fi
 
-  # Branch not on origin — likely a fork-based PR
+  # Branch not on origin — likely a fork-based PR, use GitHub's PR refs
   if [[ -z "$pr_num" ]]; then
     msg "Error: branch '$pr_branch' not found on origin and no PR number provided"
     return 1
   fi
 
-  msg "Branch not on origin, fetching from fork (PR #$pr_num)..."
-  local fork_url
-  fork_url=$(gh pr view "$pr_num" --json headRepository --jq '.headRepository.url' 2>/dev/null)
-
-  if [[ -z "$fork_url" ]]; then
-    msg "Error: could not resolve fork URL for PR #$pr_num"
-    return 1
-  fi
-
-  # Fetch the fork branch into a local branch
-  if ! git -C "$MAIN_REPO" fetch "$fork_url" "$pr_branch:$pr_branch" >/dev/null 2>&1; then
-    msg "Error fetching branch '$pr_branch' from fork"
+  msg "Branch not on origin, fetching PR #$pr_num..."
+  if ! git -C "$MAIN_REPO" fetch origin "pull/$pr_num/head:$pr_branch" >/dev/null 2>&1; then
+    msg "Error fetching PR #$pr_num"
     return 1
   fi
 
