@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.9.5"
+VERSION="1.10.0"
 
 # =============================================================================
 # Options de ligne de commande
@@ -15,6 +15,90 @@ VERSION="1.9.5"
 
 if [[ "$1" == "--version" || "$1" == "-v" ]]; then
   echo "wt $VERSION" >&2
+  exit 0
+fi
+
+# Self-update: download latest version from GitHub
+if [[ "$1" == "--update" ]]; then
+  _REPO="AThevon/wt"
+  _RAW_URL="https://raw.githubusercontent.com/$_REPO/main/wt.sh"
+
+  # Colors
+  if [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then
+    _GREEN=$'\033[32m' _RED=$'\033[31m' _CYAN=$'\033[36m' _BOLD=$'\033[1m' _RESET=$'\033[0m'
+  else
+    _GREEN='' _RED='' _CYAN='' _BOLD='' _RESET=''
+  fi
+  _msg() { echo -e "$@" >&2; }
+
+  # Detect brew installs
+  if command -v brew &>/dev/null && brew list wt &>/dev/null 2>&1; then
+    _msg ""
+    _msg "${_RED}[!!]${_RESET} wt is installed via Homebrew."
+    _msg "     Update with: ${_CYAN}brew upgrade wt${_RESET}"
+    _msg ""
+    exit 1
+  fi
+
+  # Find wt-core location
+  _wt_path=$(command -v wt-core 2>/dev/null)
+  if [[ -z "$_wt_path" ]]; then
+    _wt_path="${HOME}/.local/bin/wt-core"
+  fi
+  # Resolve symlink to actual file
+  if [[ -L "$_wt_path" ]]; then
+    _wt_path=$(readlink -f "$_wt_path" 2>/dev/null || realpath "$_wt_path" 2>/dev/null || echo "$_wt_path")
+  fi
+
+  _msg ""
+  _msg "Checking for updates..."
+
+  # Download to temp file
+  _tmp=$(mktemp)
+  trap 'rm -f "$_tmp"' EXIT
+
+  if command -v curl &>/dev/null; then
+    curl -fsSL "$_RAW_URL" -o "$_tmp" 2>/dev/null
+  elif command -v wget &>/dev/null; then
+    wget -qO "$_tmp" "$_RAW_URL" 2>/dev/null
+  else
+    _msg "${_RED}[!!]${_RESET} Neither curl nor wget found"
+    exit 1
+  fi
+
+  _latest=$(grep -m1 'VERSION=' "$_tmp" | cut -d'"' -f2)
+
+  if [[ -z "$_latest" ]]; then
+    _msg "${_RED}[!!]${_RESET} Failed to fetch latest version"
+    exit 1
+  fi
+
+  if [[ "$VERSION" == "$_latest" ]]; then
+    _msg "${_GREEN}[ok]${_RESET} Already up to date (v${VERSION})"
+    _msg ""
+    exit 0
+  fi
+
+  _msg "  ${_CYAN}v${VERSION}${_RESET} → ${_GREEN}v${_latest}${_RESET}"
+  _msg ""
+
+  # Replace wt-core
+  if [[ -w "$_wt_path" ]]; then
+    cp "$_tmp" "$_wt_path"
+    chmod +x "$_wt_path"
+  elif [[ -w "$(dirname "$_wt_path")" ]]; then
+    cp "$_tmp" "$_wt_path"
+    chmod +x "$_wt_path"
+  else
+    _msg "Updating ${_CYAN}${_wt_path}${_RESET} (requires sudo)..."
+    sudo cp "$_tmp" "$_wt_path"
+    sudo chmod +x "$_wt_path"
+  fi
+
+  _msg "${_GREEN}${_BOLD}Updated to v${_latest}!${_RESET}"
+  _msg ""
+  _msg "Restart your terminal or run: ${_CYAN}source ~/.$(basename "$SHELL")rc${_RESET}"
+  _msg ""
   exit 0
 fi
 
@@ -333,6 +417,7 @@ Options:
   --version, -v    Show version number
   --setup          Install wt (add to shell, create symlinks)
   --wizard         Re-run the first-time setup wizard
+  --update         Update wt to the latest version
   --dev            Switch to dev mode (use wt.sh from current worktree)
   --release        Switch back to release mode (use wt-core from PATH)
 

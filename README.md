@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.9.0-orange" alt="Version" />
+  <img src="https://img.shields.io/badge/version-1.10.0-orange" alt="Version" />
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License" />
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey" alt="Platform" />
 </p>
@@ -44,21 +44,21 @@ Git worktrees are powerful but managing them manually is tedious. `wt` provides:
 brew tap AThevon/wt && brew install wt
 ```
 
-### Linux / WSL
+### Linux / WSL / macOS (universal)
 
 ```bash
-git clone https://github.com/AThevon/wt.git && cd wt && ./install-linux.sh
+curl -fsSL https://raw.githubusercontent.com/AThevon/wt/main/install.sh | bash
+```
+
+This will install `wt` to `~/.local/bin`, configure your shell, and install required dependencies.
+
+### Update
+
+```bash
+wt --update
 ```
 
 ### Setup
-
-Run the setup wizard:
-
-```bash
-wt --setup
-```
-
-This will check dependencies, create symlinks, and configure your shell.
 
 On first launch, `wt` automatically runs a preferences wizard to choose your editor and platform. To re-run it at any time:
 
@@ -92,7 +92,7 @@ wt .        # Main worktree
  | |/ |/ / / /         ((__.-'((___..-'' \__.'
  |__/|__/ /_/
 
-  Git Worktree Manager v1.9.0
+  Git Worktree Manager v1.10.0
 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ myapp │ ^E: editor │ ^N: new │ ^P: PRs │ ^G: issues │ ^D: delete        │
@@ -216,16 +216,17 @@ The stash menu provides a complete workflow with rich information:
 
 ## Uninstall
 
-**macOS:**
+**Homebrew:**
 ```bash
 brew uninstall wt && brew untap AThevon/wt
 ```
 
-**Linux/WSL:**
+**Manual install (Linux/WSL/macOS):**
 ```bash
-sudo rm /usr/local/bin/wt-core
-# Remove from ~/.zshrc or ~/.bashrc:
-# eval "$(wt-core --shell-init)"
+rm ~/.local/bin/wt-core
+# Remove these lines from ~/.zshrc or ~/.bashrc:
+# export PATH="$HOME/.local/bin:$PATH"
+# command -v wt-core &>/dev/null && eval "$(wt-core --shell-init)"
 ```
 
 ## License
