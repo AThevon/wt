@@ -44,13 +44,23 @@ Git worktrees are powerful but managing them manually is tedious. `wt` provides:
 brew tap AThevon/wt && brew install wt
 ```
 
-### Linux / WSL / macOS (universal)
+### Linux / WSL / macOS (universal script)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AThevon/wt/main/install.sh | bash
 ```
 
 This will install `wt` to `~/.local/bin`, configure your shell, and install required dependencies.
+
+### Nix
+
+```bash
+# Try it
+nix run github:AThevon/wt
+
+# Or add to your flake inputs
+# inputs.wt.url = "github:AThevon/wt";
+```
 
 ### Update
 
@@ -215,6 +225,9 @@ The stash menu provides a complete workflow with rich information:
 | [claude](https://claude.ai/code) | No | AI features |
 
 ## Uninstall
+
+**Nix:**
+Remove from your flake inputs and run `home-manager switch` or `nix profile remove`.
 
 **Homebrew:**
 ```bash
