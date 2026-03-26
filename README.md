@@ -108,8 +108,10 @@ wt .        # Main worktree
 │ myapp │ ^E: editor │ ^N: new │ ^P: PRs │ ^G: issues │ ^D: delete        │
 ├─────────────────────────────────────────────────────────────────────────┤
 │ ● ~/projects/myapp                                          [main]      │
-│ ○ ~/projects/myapp-feature-auth                          *  [feature]   │
+│ ★ ~/projects/myapp-feature-new                              [feature]   │
+│ ○ ~/projects/myapp-feature-auth                          *  [auth]      │
 │ ◎ ~/projects/myapp-reviewing-fix-bug                        [fix/bug]   │
+│ ✓ ~/projects/myapp-old-feature                              [old]       │
 │ -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-     │
 │ › Create a worktree                                                     │
 │ ◇ Manage stashes                                                        │
@@ -119,7 +121,16 @@ wt .        # Main worktree
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-The `*` indicates worktrees with uncommitted changes.
+### Worktree Status Indicators
+
+| Icon | Color | Meaning |
+|------|-------|---------|
+| `●` | dim | Main branch (main/master) |
+| `★` | yellow | New local branch (never pushed) |
+| `○` | orange | In progress (pushed, not merged) |
+| `◎` | magenta | Review worktree |
+| `✓` | green | Merged (squash merge supported) |
+| `*` | — | Dirty (uncommitted changes) |
 
 ## Keyboard Shortcuts
 
