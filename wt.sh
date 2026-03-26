@@ -1259,6 +1259,12 @@ format_worktree_line() {
 }
 
 format_all_worktrees() {
+  # Prune stale remote refs so merged branch detection is accurate
+  if [[ "${WT_AUTO_FETCH:-true}" != "false" ]]; then
+    git -C "$MAIN_REPO" fetch --prune --quiet 2>/dev/null &
+    wait $!
+  fi
+
   while IFS= read -r wt; do
     format_worktree_line "$wt"
   done < <(get_worktrees)
