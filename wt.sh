@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.10.3"
+VERSION="1.10.4"
 
 # =============================================================================
 # Options de ligne de commande
@@ -1180,14 +1180,16 @@ is_new_local_branch() {
 
 # Check if a branch is merged into the default branch
 # Supports both regular merges and squash merges — fully local, no network calls
+# Uses origin/<default_branch> for comparison so a fetch is enough (no pull needed)
 is_branch_merged() {
   local branch="$1"
   local default_branch=$(get_default_branch)
+  local origin_default="origin/$default_branch"
 
   [[ "$branch" == "$default_branch" ]] && return 1
 
   # Method 1: Standard merge (branch is ancestor of default branch)
-  if git -C "$MAIN_REPO" merge-base --is-ancestor "$branch" "$default_branch" 2>/dev/null; then
+  if git -C "$MAIN_REPO" merge-base --is-ancestor "$branch" "$origin_default" 2>/dev/null; then
     return 0
   fi
 
@@ -1196,7 +1198,7 @@ is_branch_merged() {
   # even though the commit history differs. Comparing trees is instant and local.
   local branch_tree main_tree
   branch_tree=$(git -C "$MAIN_REPO" rev-parse "$branch^{tree}" 2>/dev/null) || return 1
-  main_tree=$(git -C "$MAIN_REPO" rev-parse "$default_branch^{tree}" 2>/dev/null) || return 1
+  main_tree=$(git -C "$MAIN_REPO" rev-parse "$origin_default^{tree}" 2>/dev/null) || return 1
   [[ "$branch_tree" == "$main_tree" ]]
 }
 
