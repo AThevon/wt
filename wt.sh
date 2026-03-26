@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.10.2"
+VERSION="1.10.3"
 
 # =============================================================================
 # Options de ligne de commande
@@ -1167,60 +1167,37 @@ get_default_branch() {
   echo "$default_branch"
 }
 
-# Check if a branch has tracking config (has been pushed at some point)
-has_tracking_config() {
-  local branch="$1"
-  [[ -n $(git -C "$MAIN_REPO" config "branch.$branch.remote" 2>/dev/null) ]]
-}
-
-# Check if a branch exists on the remote
-has_remote_ref() {
-  local branch="$1"
-  git -C "$MAIN_REPO" rev-parse --verify "refs/remotes/origin/$branch" &>/dev/null
-}
-
 # Check if a branch is new (never been pushed to remote)
 is_new_local_branch() {
   local branch="$1"
   local default_branch=$(get_default_branch)
 
-  if [[ "$branch" == "$default_branch" ]]; then
-    return 1
-  fi
+  [[ "$branch" == "$default_branch" ]] && return 1
 
-  # No tracking config AND no remote ref → new local branch
-  if ! has_tracking_config "$branch" && ! has_remote_ref "$branch"; then
-    return 0
-  fi
-
-  return 1
+  # No tracking config → never been pushed → new local branch
+  [[ -z $(git -C "$MAIN_REPO" config "branch.$branch.remote" 2>/dev/null) ]]
 }
 
 # Check if a branch is merged into the default branch
-# Supports both regular merges and squash merges
+# Supports both regular merges and squash merges — fully local, no network calls
 is_branch_merged() {
   local branch="$1"
   local default_branch=$(get_default_branch)
 
-  # Skip check for the default branch itself
-  if [[ "$branch" == "$default_branch" ]]; then
-    return 1
-  fi
+  [[ "$branch" == "$default_branch" ]] && return 1
 
-  # Squash merge detection: branch was pushed (has tracking config) but remote branch is gone
-  # This happens when a PR is squash-merged and GitHub/GitLab deletes the remote branch
-  if has_tracking_config "$branch" && ! has_remote_ref "$branch"; then
+  # Method 1: Standard merge (branch is ancestor of default branch)
+  if git -C "$MAIN_REPO" merge-base --is-ancestor "$branch" "$default_branch" 2>/dev/null; then
     return 0
   fi
 
-  # Standard merge detection: branch commits are reachable from default branch
-  # Only valid if the branch exists on remote (to avoid false positives on new local branches)
-  if has_remote_ref "$branch" && \
-     git -C "$MAIN_REPO" branch --merged "$default_branch" 2>/dev/null | grep -qE "^[[:space:]*+]*$branch$"; then
-    return 0
-  fi
-
-  return 1
+  # Method 2: Squash merge detection via tree comparison
+  # After a squash merge, the branch content is identical to main
+  # even though the commit history differs. Comparing trees is instant and local.
+  local branch_tree main_tree
+  branch_tree=$(git -C "$MAIN_REPO" rev-parse "$branch^{tree}" 2>/dev/null) || return 1
+  main_tree=$(git -C "$MAIN_REPO" rev-parse "$default_branch^{tree}" 2>/dev/null) || return 1
+  [[ "$branch_tree" == "$main_tree" ]]
 }
 
 format_worktree_line() {
@@ -1259,12 +1236,6 @@ format_worktree_line() {
 }
 
 format_all_worktrees() {
-  # Prune stale remote refs so merged branch detection is accurate
-  if [[ "${WT_AUTO_FETCH:-true}" != "false" ]]; then
-    git -C "$MAIN_REPO" fetch --prune --quiet 2>/dev/null &
-    wait $!
-  fi
-
   while IFS= read -r wt; do
     format_worktree_line "$wt"
   done < <(get_worktrees)

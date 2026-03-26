@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.10.2-orange" alt="Version" />
+  <img src="https://img.shields.io/badge/version-1.10.3-orange" alt="Version" />
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License" />
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey" alt="Platform" />
 </p>
@@ -102,7 +102,7 @@ wt .        # Main worktree
  | |/ |/ / / /         ((__.-'((___..-'' \__.'
  |__/|__/ /_/
 
-  Git Worktree Manager v1.10.2
+  Git Worktree Manager v1.10.3
 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ myapp │ ^E: editor │ ^N: new │ ^P: PRs │ ^G: issues │ ^D: delete        │
