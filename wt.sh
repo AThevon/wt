@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.10.0"
+VERSION="1.10.1"
 
 # =============================================================================
 # Options de ligne de commande
@@ -1167,7 +1167,37 @@ get_default_branch() {
   echo "$default_branch"
 }
 
-# Check if a branch is merged into the default branch (fast, local check)
+# Check if a branch has tracking config (has been pushed at some point)
+has_tracking_config() {
+  local branch="$1"
+  [[ -n $(git -C "$MAIN_REPO" config "branch.$branch.remote" 2>/dev/null) ]]
+}
+
+# Check if a branch exists on the remote
+has_remote_ref() {
+  local branch="$1"
+  git -C "$MAIN_REPO" rev-parse --verify "refs/remotes/origin/$branch" &>/dev/null
+}
+
+# Check if a branch is new (never been pushed to remote)
+is_new_local_branch() {
+  local branch="$1"
+  local default_branch=$(get_default_branch)
+
+  if [[ "$branch" == "$default_branch" ]]; then
+    return 1
+  fi
+
+  # No tracking config AND no remote ref → new local branch
+  if ! has_tracking_config "$branch" && ! has_remote_ref "$branch"; then
+    return 0
+  fi
+
+  return 1
+}
+
+# Check if a branch is merged into the default branch
+# Supports both regular merges and squash merges
 is_branch_merged() {
   local branch="$1"
   local default_branch=$(get_default_branch)
@@ -1177,8 +1207,20 @@ is_branch_merged() {
     return 1
   fi
 
-  # Check if branch is merged into default branch
-  git -C "$MAIN_REPO" branch --merged "$default_branch" 2>/dev/null | grep -qE "^[[:space:]*+]*$branch$"
+  # Squash merge detection: branch was pushed (has tracking config) but remote branch is gone
+  # This happens when a PR is squash-merged and GitHub/GitLab deletes the remote branch
+  if has_tracking_config "$branch" && ! has_remote_ref "$branch"; then
+    return 0
+  fi
+
+  # Standard merge detection: branch commits are reachable from default branch
+  # Only valid if the branch exists on remote (to avoid false positives on new local branches)
+  if has_remote_ref "$branch" && \
+     git -C "$MAIN_REPO" branch --merged "$default_branch" 2>/dev/null | grep -qE "^[[:space:]*+]*$branch$"; then
+    return 0
+  fi
+
+  return 1
 }
 
 format_worktree_line() {
@@ -1205,8 +1247,11 @@ format_worktree_line() {
   elif [[ "$dir_name" == *"-reviewing-"* ]]; then
     # Review worktree - magenta eye
     status_icon="${C_MAGENTA}◎${C_RESET}"
+  elif is_new_local_branch "$branch"; then
+    # New local branch (never pushed) - yellow star
+    status_icon="${C_YELLOW}★${C_RESET}"
   else
-    # Not merged - orange circle (in progress)
+    # In progress (pushed, not merged) - orange circle
     status_icon="${C_ORANGE}○${C_RESET}"
   fi
 

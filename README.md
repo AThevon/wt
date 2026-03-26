@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.10.0-orange" alt="Version" />
+  <img src="https://img.shields.io/badge/version-1.10.1-orange" alt="Version" />
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License" />
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey" alt="Platform" />
 </p>
@@ -102,14 +102,16 @@ wt .        # Main worktree
  | |/ |/ / / /         ((__.-'((___..-'' \__.'
  |__/|__/ /_/
 
-  Git Worktree Manager v1.10.0
+  Git Worktree Manager v1.10.1
 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ myapp │ ^E: editor │ ^N: new │ ^P: PRs │ ^G: issues │ ^D: delete        │
 ├─────────────────────────────────────────────────────────────────────────┤
 │ ● ~/projects/myapp                                          [main]      │
-│ ○ ~/projects/myapp-feature-auth                          *  [feature]   │
+│ ★ ~/projects/myapp-feature-new                              [feature]   │
+│ ○ ~/projects/myapp-feature-auth                          *  [auth]      │
 │ ◎ ~/projects/myapp-reviewing-fix-bug                        [fix/bug]   │
+│ ✓ ~/projects/myapp-old-feature                              [old]       │
 │ -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-     │
 │ › Create a worktree                                                     │
 │ ◇ Manage stashes                                                        │
@@ -119,7 +121,16 @@ wt .        # Main worktree
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-The `*` indicates worktrees with uncommitted changes.
+### Worktree Status Indicators
+
+| Icon | Color | Meaning |
+|------|-------|---------|
+| `●` | dim | Main branch (main/master) |
+| `★` | yellow | New local branch (never pushed) |
+| `○` | orange | In progress (pushed, not merged) |
+| `◎` | magenta | Review worktree |
+| `✓` | green | Merged (squash merge supported) |
+| `*` | — | Dirty (uncommitted changes) |
 
 ## Keyboard Shortcuts
 

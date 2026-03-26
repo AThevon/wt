@@ -35,9 +35,10 @@ CLI bash interactif (~3700 lignes, fichier unique `wt.sh`) pour gérer les git w
 | Icône | Couleur | Signification |
 |-------|---------|---------------|
 | `●` | dim | Branche principale (main/master) |
-| `✓` | vert | Branche mergée |
+| `✓` | vert | Branche mergée (squash merge supporté) |
 | `◎` | magenta | Worktree de review |
-| `○` | orange | En cours (non mergée) |
+| `★` | jaune | Nouvelle branche locale (jamais pushée) |
+| `○` | orange | En cours (pushée, non mergée) |
 | `*` | — | Dirty (changements non committés) |
 
 ### Indicateurs PR (dans `cli_pr_list()`)
