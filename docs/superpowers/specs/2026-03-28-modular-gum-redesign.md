@@ -133,6 +133,33 @@ Git Worktree Manager v{VERSION}
 
 WT ANSI Shadow à gauche + bande regard tigre à droite (6 lignes). Tout en orange bold (`\033[1;38;5;208m`). Version en dim, collée à gauche.
 
+## Icônes du menu principal
+
+Les actions du menu principal passent d'icônes dim uniformes à des icônes colorées (seule l'icône est colorée, le texte reste normal) :
+
+| Avant | Après | Action |
+|---|---|---|
+| `›` dim | `+` vert | Create a worktree |
+| `◇` dim | `⧉` orange | Manage stashes |
+| `×` dim | `✕` rouge | Delete worktree(s) |
+| `◦` dim | `⚙` dim | Settings |
+| `‹` dim | `↩` dim | Quit |
+
+Les icônes worktree (●, ✓, ◎, ★, ○, *) restent inchangées — elles sont déjà bien.
+
+## Test en local
+
+Le mode `--dev` existant permet de tester le script local :
+
+```bash
+eval "$(./wt.sh --dev)"   # Pointe wt vers le script local
+wt                         # Utilise le code local + lib/
+```
+
+Le `SCRIPT_DIR` dans `wt.sh` résout le dossier `lib/` relativement au script, donc `--dev` fonctionne sans modification après le split.
+
+Pour revenir au mode release : `wt --release`
+
 ## Tests
 
 Les tests BATS existants doivent continuer à passer. Le helper `load_wt()` dans `test_helper/common.bash` sera mis à jour pour sourcer les modules dans l'ordre au lieu du fichier unique.
