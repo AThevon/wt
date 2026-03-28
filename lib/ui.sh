@@ -57,19 +57,16 @@ ui_box() {
   gum style --border rounded --padding "0 1" "$@" >&2
 }
 
-# Print the logo — chafa render of tiger PNG if available, fallback to text
+# Print the logo — pre-rendered ANSI tiger, fallback to text
 print_logo() {
-  local logo_img="$SCRIPT_DIR/assets/logo.png"
+  local logo_ansi="$SCRIPT_DIR/assets/logo.ansi"
   # Nix install: assets/ is a sibling of bin/
-  if [[ ! -f "$logo_img" ]]; then
-    logo_img="$(dirname "$SCRIPT_DIR")/assets/logo.png"
+  if [[ ! -f "$logo_ansi" ]]; then
+    logo_ansi="$(dirname "$SCRIPT_DIR")/assets/logo.ansi"
   fi
 
-  if command -v chafa &>/dev/null && [[ -f "$logo_img" ]]; then
-    local cols=$(( $(tput cols 2>/dev/null || echo 80) / 6 ))
-    [[ $cols -lt 8 ]] && cols=8
-    [[ $cols -gt 18 ]] && cols=18
-    chafa --format=symbols --size="${cols}x" --symbols=half --passthrough=none --animate=off --polite=on "$logo_img" 2>/dev/null >&2
+  if [[ -f "$logo_ansi" ]] && [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then
+    cat "$logo_ansi" >&2
   else
     echo -e "\033[1;38;5;208m  wt\033[0m" >&2
   fi
