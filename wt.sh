@@ -514,7 +514,7 @@ main_menu() {
 
     # Header avec raccourcis clavier
     local pr_term=$(get_pr_term)
-    local header="${C_ORANGE}wt${C_RESET} ${C_DIM}│${C_RESET} ${C_DIM}^E${C_RESET} editor ${C_DIM}│${C_RESET} ${C_DIM}^N${C_RESET} new ${C_DIM}│${C_RESET} ${C_DIM}^P${C_RESET} ${pr_term}s ${C_DIM}│${C_RESET} ${C_DIM}^G${C_RESET} issues ${C_DIM}│${C_RESET} ${C_DIM}^D${C_RESET} delete"
+    local header="${C_ORANGE}wt${C_RESET} ${C_DIM}v${VERSION} │${C_RESET} ${C_DIM}^E${C_RESET} editor ${C_DIM}│${C_RESET} ${C_DIM}^N${C_RESET} new ${C_DIM}│${C_RESET} ${C_DIM}^P${C_RESET} ${pr_term}s ${C_DIM}│${C_RESET} ${C_DIM}^G${C_RESET} issues ${C_DIM}│${C_RESET} ${C_DIM}^D${C_RESET} delete"
 
     local result=$(echo "$menu" | \
       fzf --height=70% \
