@@ -24,6 +24,17 @@ else
   C_YELLOW='' C_BLUE='' C_MAGENTA='' C_CYAN='' C_WHITE='' C_ORANGE=''
 fi
 
+# Default fzf theme for wt — only applied if user has no custom theme
+if [[ -z "${FZF_DEFAULT_OPTS:-}" ]]; then
+  export FZF_DEFAULT_OPTS="
+    --color=bg:-1,fg:#908e8e,hl:#e8a030
+    --color=bg+:#1e1e1e,fg+:#ffffff,hl+:#f0b040
+    --color=border:#333333,header:#e8a030,info:#555555
+    --color=prompt:#e8a030,pointer:#e8a030,marker:#f0b040
+    --color=spinner:#e8a030
+  "
+fi
+
 # =============================================================================
 # Config
 # =============================================================================
