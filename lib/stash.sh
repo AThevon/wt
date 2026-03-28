@@ -107,9 +107,8 @@ _stash_partial() {
     return 1
   fi
 
-  msg "Enter stash message (or leave empty):"
   local stash_msg
-  read -r stash_msg </dev/tty
+  stash_msg=$(ui_input "Stash message:" "optional")
 
   # Identifier les fichiers non trackés parmi la sélection
   local untracked_files=$(git ls-files --others --exclude-standard 2>/dev/null)
@@ -178,9 +177,8 @@ menu_stash() {
 
       case "$choice" in
         "Create stash (all"*)
-          msg "Enter stash message (or leave empty):"
           local stash_msg
-          read -r stash_msg </dev/tty
+          stash_msg=$(ui_input "Stash message:" "optional")
           if [[ -n "$stash_msg" ]]; then
             git stash push -u -m "$stash_msg" >/dev/null 2>&1
           else
@@ -332,9 +330,8 @@ ref         │ age  │ files │ branch       │ message
     case "$key" in
       "ctrl-n")
         # Nouveau stash (tous les changements)
-        msg "Enter stash message (or leave empty):"
         local stash_msg
-        read -r stash_msg </dev/tty
+        stash_msg=$(ui_input "Stash message:" "optional")
         if [[ -n "$stash_msg" ]]; then
           git stash push -u -m "$stash_msg" >/dev/null 2>&1
         else
@@ -376,9 +373,7 @@ ref         │ age  │ files │ branch       │ message
         # Drop (multi-select supporté)
         if [[ -n "$selected" ]]; then
           local count=$(echo "$selected" | wc -l | tr -d ' ')
-          local confirm=$(printf "%s\n" "Yes, delete $count stash(es)" "No, cancel" | \
-            fzf --height=20% --layout=reverse --border --header="Delete selected stash(es)?")
-          if [[ "$confirm" == "Yes"* ]]; then
+          if ui_confirm "Delete $count stash(es)?"; then
             # Drop en ordre inverse pour éviter les problèmes d'index
             echo "$selected" | tac | while IFS= read -r line; do
               local ref=$(echo "$line" | cut -d' ' -f1)
@@ -393,9 +388,8 @@ ref         │ age  │ files │ branch       │ message
         # Créer une branche depuis le stash
         if [[ -n "$selected" ]]; then
           local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
-          msg "Enter branch name:"
           local branch_name
-          read -r branch_name </dev/tty
+          branch_name=$(ui_input "Branch name:" "feature/...")
           if [[ -n "$branch_name" ]]; then
             if git stash branch "$branch_name" "$stash_ref" 2>&1; then
               msg "Branch '$branch_name' created from $stash_ref"
@@ -430,9 +424,8 @@ ref         │ age  │ files │ branch       │ message
         # Créer un worktree depuis le stash
         if [[ -n "$selected" ]]; then
           local stash_ref=$(echo "$selected" | head -1 | cut -d' ' -f1)
-          msg "Enter worktree/branch name:"
           local wt_name
-          read -r wt_name </dev/tty
+          wt_name=$(ui_input "Worktree/branch name:" "feature/...")
           if [[ -n "$wt_name" ]]; then
             local main_repo=$(git rev-parse --show-toplevel 2>/dev/null)
             local parent_dir=$(dirname "$main_repo")
@@ -445,9 +438,7 @@ ref         │ age  │ files │ branch       │ message
               if (cd "$wt_path" && git stash apply "$stash_ref" 2>&1); then
                 msg "Worktree created at $wt_path with stash applied"
                 # Proposer de drop le stash
-                local drop_confirm=$(printf "%s\n" "Yes, drop the stash" "No, keep it" | \
-                  fzf --height=20% --layout=reverse --border --header="Drop $stash_ref?")
-                if [[ "$drop_confirm" == "Yes"* ]]; then
+                if ui_confirm "Drop $stash_ref?"; then
                   git stash drop "$stash_ref" >/dev/null 2>&1
                   msg "Stash dropped"
                 fi
@@ -455,7 +446,7 @@ ref         │ age  │ files │ branch       │ message
                 echo "$wt_path"
                 return 0
               else
-                msg "Worktree created but stash apply failed (conflicts?)"
+                ui_warn "Worktree created but stash apply failed (conflicts?)"
                 echo "$wt_path"
                 return 0
               fi
@@ -666,9 +657,8 @@ Back"
         fi
         ;;
       "Create worktree"*)
-        msg "Enter worktree/branch name:"
         local wt_name
-        read -r wt_name </dev/tty
+        wt_name=$(ui_input "Worktree/branch name:" "feature/...")
         if [[ -n "$wt_name" ]]; then
           local main_repo=$(git rev-parse --show-toplevel 2>/dev/null)
           local parent_dir=$(dirname "$main_repo")
@@ -677,16 +667,14 @@ Back"
           if git worktree add -b "$wt_name" "$wt_path" 2>&1; then
             if (cd "$wt_path" && git stash apply "$stash_ref" 2>&1); then
               msg "Worktree created at $wt_path with stash applied"
-              local drop_confirm=$(printf "%s\n" "Yes, drop the stash" "No, keep it" | \
-                fzf --height=20% --layout=reverse --border --header="Drop $stash_ref?")
-              if [[ "$drop_confirm" == "Yes"* ]]; then
+              if ui_confirm "Drop $stash_ref?"; then
                 git stash drop "$stash_ref" >/dev/null 2>&1
                 msg "Stash dropped"
               fi
               echo "$wt_path"
               return 0
             else
-              msg "Worktree created but stash apply failed (conflicts?)"
+              ui_warn "Worktree created but stash apply failed (conflicts?)"
               echo "$wt_path"
               return 0
             fi
@@ -696,17 +684,14 @@ Back"
         fi
         ;;
       "Drop"*)
-        local confirm=$(printf "%s\n" "Yes, delete" "No, cancel" | \
-          fzf --height=20% --layout=reverse --border --header="Delete $stash_ref?")
-        if [[ "$confirm" == "Yes"* ]]; then
+        if ui_confirm "Delete $stash_ref?"; then
           git stash drop "$stash_ref" >/dev/null 2>&1
           msg "Stash dropped"
         fi
         ;;
       "Create branch"*)
-        msg "Enter branch name:"
         local branch_name
-        read -r branch_name </dev/tty
+        branch_name=$(ui_input "Branch name:" "feature/...")
         if [[ -n "$branch_name" ]]; then
           if git stash branch "$branch_name" "$stash_ref" 2>&1; then
             msg "Branch '$branch_name' created from $stash_ref"
@@ -727,9 +712,8 @@ Back"
         continue
         ;;
       "Rename"*)
-        msg "Enter new stash message:"
         local new_msg
-        read -r new_msg </dev/tty
+        new_msg=$(ui_input "New stash message:" "")
         if [[ -n "$new_msg" ]]; then
           # Sauvegarder le contenu, drop, et recréer avec le nouveau message
           local temp_branch="temp-stash-rename-$$"

@@ -20,6 +20,22 @@ ui_spin() {
   gum spin --spinner dot --title "$title" -- "$@"
 }
 
+# Like ui_spin but for bash functions (not external commands).
+# Runs the function in background, shows spinner, returns stdout.
+ui_spin_fn() {
+  local title="$1"; shift
+  local _tmpfile
+  _tmpfile=$(mktemp)
+  "$@" > "$_tmpfile" &
+  local _pid=$!
+  gum spin --spinner dot --title "$title" -- bash -c "while kill -0 $_pid 2>/dev/null; do sleep 0.1; done" >&2
+  wait "$_pid"
+  local _ret=$?
+  cat "$_tmpfile"
+  rm -f "$_tmpfile"
+  return $_ret
+}
+
 ui_confirm() {
   gum confirm "$@"
 }

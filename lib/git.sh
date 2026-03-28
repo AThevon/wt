@@ -175,11 +175,10 @@ create_from_current() {
   msg "Creating worktree..."
 
   if git worktree add -b "$new_branch" "$worktree_path" HEAD >/dev/null 2>&1; then
-    msg "Worktree created: $worktree_path"
-    msg "Branch: $new_branch"
+    ui_box "Worktree created" "$worktree_path" "Branch: $new_branch"
     echo "$worktree_path"  # SEUL output sur stdout
   else
-    msg "Error creating worktree"
+    ui_error "Error creating worktree"
     return 1
   fi
 }
@@ -215,10 +214,10 @@ create_from_branch() {
   msg "Creating worktree..."
 
   if git worktree add "$worktree_path" "$branch_name" >/dev/null 2>&1; then
-    msg "Worktree created: $worktree_path"
+    ui_box "Worktree created" "$worktree_path"
     echo "$worktree_path"  # SEUL output sur stdout
   else
-    msg "Error creating worktree"
+    ui_error "Error creating worktree"
     return 1
   fi
 }
@@ -226,9 +225,8 @@ create_from_branch() {
 # Créer un worktree avec une nouvelle branche
 create_new_branch() {
   # 1. Input nom de branche
-  msg "Enter new branch name:"
   local input_branch_name
-  read -r input_branch_name </dev/tty
+  input_branch_name=$(ui_input "Branch name:" "feature/...")
 
   if [[ -z "$input_branch_name" ]]; then
     msg "No branch name provided"
@@ -277,11 +275,10 @@ create_new_branch() {
   msg "Creating worktree with new branch '$branch_name' from '$base_branch'..."
 
   if git worktree add -b "$branch_name" "$worktree_path" "$base_branch" >/dev/null 2>&1; then
-    msg "Worktree created: $worktree_path"
-    msg "New branch: $branch_name (based on $base_branch)"
+    ui_box "Worktree created" "$worktree_path" "Branch: $branch_name (from $base_branch)"
     echo "$worktree_path"  # SEUL output sur stdout
   else
-    msg "Error creating worktree"
+    ui_error "Error creating worktree"
     return 1
   fi
 }
@@ -319,7 +316,7 @@ create_from_pr() {
     local ret=$?
 
     if [[ $ret -eq 0 ]]; then
-      msg "Worktree created: $worktree_path"
+      ui_box "Worktree created" "$worktree_path"
       echo "$worktree_path"
       return 0
     fi
@@ -333,20 +330,20 @@ create_from_pr() {
         return 0
       fi
     fi
-    msg "Error creating worktree:"
+    ui_error "Error creating worktree"
     msg "$git_output"
     return 1
   fi
 
   # Branch not on origin — likely a fork-based PR, use GitHub's PR refs
   if [[ -z "$pr_num" ]]; then
-    msg "Error: branch '$pr_branch' not found on origin and no PR number provided"
+    ui_error "Branch '$pr_branch' not found on origin and no PR number provided"
     return 1
   fi
 
   msg "Branch not on origin, fetching PR #$pr_num..."
   if ! git -C "$MAIN_REPO" fetch origin "pull/$pr_num/head:$pr_branch" >/dev/null 2>&1; then
-    msg "Error fetching PR #$pr_num"
+    ui_error "Error fetching PR #$pr_num"
     return 1
   fi
 
@@ -355,10 +352,10 @@ create_from_pr() {
   git_output=$(git -C "$MAIN_REPO" worktree add "$worktree_path" "$pr_branch" 2>&1)
 
   if [[ $? -eq 0 ]]; then
-    msg "Worktree created: $worktree_path"
+    ui_box "Worktree created" "$worktree_path"
     echo "$worktree_path"
   else
-    msg "Error creating worktree:"
+    ui_error "Error creating worktree"
     msg "$git_output"
     return 1
   fi
@@ -395,11 +392,10 @@ create_from_issue() {
   msg "Creating worktree with new branch '$branch_name' from '$default_branch'..."
 
   if git worktree add -b "$branch_name" "$worktree_path" "origin/$default_branch" >/dev/null 2>&1; then
-    msg "Worktree created: $worktree_path"
-    msg "Branch: $branch_name"
+    ui_box "Worktree created" "$worktree_path" "Branch: $branch_name"
     echo "$worktree_path"  # SEUL output sur stdout
   else
-    msg "Error creating worktree"
+    ui_error "Error creating worktree"
     return 1
   fi
 }

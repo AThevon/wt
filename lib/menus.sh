@@ -244,9 +244,8 @@ menu_review_pr() {
   fi
 
   local pr_term=$(get_pr_term)
-  loader_start "Fetching ${pr_term}s..."
-  local prs=$(get_formatted_prs)
-  loader_stop
+  local prs
+  prs=$(ui_spin_fn "Fetching ${pr_term}s..." get_formatted_prs)
   if [[ -z "$prs" ]]; then
     msg ""
     msg "No open ${pr_term}s found."
@@ -408,9 +407,8 @@ menu_from_issue() {
     fi
   fi
 
-  loader_start "Fetching issues..."
-  local issues=$(get_formatted_issues)
-  loader_stop
+  local issues
+  issues=$(ui_spin_fn "Fetching issues..." get_formatted_issues)
   if [[ -z "$issues" ]]; then
     msg ""
     msg "No open issues found."
@@ -671,30 +669,12 @@ action_delete_worktrees() {
 
   # Extra confirmation if dirty worktrees
   if [[ $dirty_count -gt 0 ]]; then
-    local dirty_confirm
-    dirty_confirm=$(printf "%s\n" "Yes, delete anyway (lose changes)" "Cancel" | \
-      fzf --height=40% \
-          --layout=reverse \
-          --border \
-          --header="WARNING: $dirty_count worktree(s) have uncommitted changes!" \
-          --preview="echo 'Uncommitted changes in:'; echo ''; echo '$dirty_list'" \
-          --preview-window=right:50%)
-
-    if [[ "$dirty_confirm" != "Yes"* ]]; then
-      msg "Cancelled"
-      return 1
-    fi
+    ui_warn "$dirty_count worktree(s) have uncommitted changes"
+    ui_confirm "Delete anyway (lose changes)?" || { msg "Cancelled"; return 1; }
   fi
 
   # Final confirmation
-  local confirm
-  confirm=$(printf "%s\n" "Yes, delete $count worktree(s)" "Cancel" | \
-    fzf --height=20% \
-        --layout=reverse \
-        --border \
-        --header="Confirm deletion?")
-
-  if [[ "$confirm" == "Yes"* ]]; then
+  if ui_confirm "Delete $count worktree(s)?"; then
     echo "$selected" | while IFS= read -r line; do
       local to_remove=$(echo "$line" | awk '{print $2}' | sed "s|^~|$HOME|")
       # Try normal remove, then force, then manual cleanup
@@ -788,9 +768,7 @@ run_preferences_wizard() {
   local selected_editor=""
   if [[ "$ide_key" != "ctrl-s" && -n "$ide_choice" ]]; then
     if [[ "$ide_choice" == "custom..." ]]; then
-      msg ""
-      msg "Enter your editor command (e.g. emacs, nano, subl):"
-      read -r selected_editor </dev/tty
+      selected_editor=$(ui_input "Editor command:" "emacs, nano, subl...")
     else
       selected_editor="$ide_choice"
     fi
@@ -1129,8 +1107,7 @@ menu_settings() {
               --header="${C_BOLD}Select IDE${C_RESET}")
         if [[ -n "$choice" ]]; then
           if [[ "$choice" == "custom..." ]]; then
-            msg "Enter editor command:"
-            read -r choice </dev/tty
+            choice=$(ui_input "Editor command:" "emacs, nano, subl...")
           fi
           if [[ -n "$choice" ]]; then
             save_config_value "WT_EDITOR" "$choice"
@@ -1150,9 +1127,8 @@ menu_settings() {
         fi
         ;;
       Worktree)
-        msg "Enter base directory for new worktrees (empty = default):"
         local dir
-        read -r dir </dev/tty
+        dir=$(ui_input "Worktree base directory:" "/path/to/dir")
         save_config_value "WT_WORKTREE_DIR" "$dir"
         export WT_WORKTREE_DIR="$dir"
         ;;
@@ -1167,9 +1143,8 @@ menu_settings() {
         fi
         ;;
       Feature)
-        msg "Enter feature branch prefix (e.g. feature/, feat/, task/):"
         local prefix
-        read -r prefix </dev/tty
+        prefix=$(ui_input "Feature prefix:" "feature/")
         if [[ -n "$prefix" ]]; then
           save_config_value "WT_FEATURE_PREFIX" "$prefix"
           export WT_FEATURE_PREFIX="$prefix"
@@ -1206,9 +1181,8 @@ menu_settings() {
         fi
         ;;
       PR/Issue)
-        msg "Enter max items in lists (default: 20):"
         local limit
-        read -r limit </dev/tty
+        limit=$(ui_input "Max items in lists:" "20")
         if [[ "$limit" =~ ^[0-9]+$ ]]; then
           save_config_value "WT_LIST_LIMIT" "$limit"
           export WT_LIST_LIMIT="$limit"
