@@ -2,13 +2,27 @@
 load "${BATS_TEST_DIRNAME}/test_helper/bats-support/load"
 load "${BATS_TEST_DIRNAME}/test_helper/bats-assert/load"
 
-# Source wt.sh with all functions available, entry point skipped.
+# Source individual modules with all functions available, entry point skipped.
 # NOTE: Must be called from a git repository context (the project root).
 load_wt() {
   # Reset cached platform to avoid state leakage between tests
   _WT_PLATFORM=""
+  VERSION="test"
+  local wt_root="${BATS_TEST_DIRNAME}/.."
   # shellcheck disable=SC1091
-  source "${BATS_TEST_DIRNAME}/../wt.sh"
+  source "$wt_root/lib/core.sh"
+  # shellcheck disable=SC1091
+  source "$wt_root/lib/ui.sh"
+  # shellcheck disable=SC1091
+  source "$wt_root/lib/git.sh"
+  # shellcheck disable=SC1091
+  source "$wt_root/lib/cli.sh"
+  # shellcheck disable=SC1091
+  source "$wt_root/lib/prompts.sh"
+  # shellcheck disable=SC1091
+  source "$wt_root/lib/menus.sh"
+  # shellcheck disable=SC1091
+  source "$wt_root/lib/stash.sh"
 }
 
 # Set WT_CONFIG_FILE to a fresh temp file for test isolation

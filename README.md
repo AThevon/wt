@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.10.4-orange" alt="Version" />
+  <img src="https://img.shields.io/badge/version-2.0.0-orange" alt="Version" />
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License" />
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey" alt="Platform" />
 </p>
@@ -90,35 +90,19 @@ wt .        # Main worktree
 ### Main Menu
 
 ```
-                                   __,,,,_
-                    _ __..-;''`--/'/ /.',-`-.
-                (`/' ` |  \ \ \\ / / / / .-'/`,_
-               /'`\ \   |  \ | \| // // / -.,/_,'-,
-              /<7' ;  \ \  | ; ||/ /| | \/    |`-/,/-.,_,/')
-             /  _.-, `,-\,__|  _-| / \ \/|_/  |    '-/.;.\'
-             `-`  f/ ;      / __/ \__ `/ |__/ |
-  _      ________ `-'      |  -| =|\_  \  |-' |
- | | /| / /_  __/       __/   /_..-' `  ),'  //
- | |/ |/ / / /         ((__.-'((___..-'' \__.'
- |__/|__/ /_/
+wt v2.0.0 │ ^E editor │ ^N new │ ^P PRs │ ^G issues │ ^D delete
+──────────────────────────────────────────────────────────────────
+  ● ~/projects/myapp                                    [main]
+  ★ ~/projects/myapp-feature-new                        [feature]
+  ○ ~/projects/myapp-feature-auth                    *  [auth]
+  ◎ ~/projects/myapp-reviewing-fix-bug                  [fix/bug]
+  ✓ ~/projects/myapp-old-feature                        [old]
 
-  Git Worktree Manager v1.10.4
-
-┌─────────────────────────────────────────────────────────────────────────┐
-│ myapp │ ^E: editor │ ^N: new │ ^P: PRs │ ^G: issues │ ^D: delete        │
-├─────────────────────────────────────────────────────────────────────────┤
-│ ● ~/projects/myapp                                          [main]      │
-│ ★ ~/projects/myapp-feature-new                              [feature]   │
-│ ○ ~/projects/myapp-feature-auth                          *  [auth]      │
-│ ◎ ~/projects/myapp-reviewing-fix-bug                        [fix/bug]   │
-│ ✓ ~/projects/myapp-old-feature                              [old]       │
-│ -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-     │
-│ › Create a worktree                                                     │
-│ ◇ Manage stashes                                                        │
-│ × Delete worktree(s)                                                    │
-│ ◦ Settings                                                              │
-│ ‹ Quit                                                                  │
-└─────────────────────────────────────────────────────────────────────────┘
+  + Create a worktree
+  ⧉ Manage stashes
+  ✕ Delete worktree(s)
+  ⚙ Settings
+  ↩ Quit
 ```
 
 ### Worktree Status Indicators
@@ -231,8 +215,10 @@ The stash menu provides a complete workflow with rich information:
 | Dependency | Required | Purpose |
 |------------|----------|---------|
 | [fzf](https://github.com/junegunn/fzf) | Yes | Interactive selection |
+| [gum](https://github.com/charmbracelet/gum) | Yes | Styled UI (spinners, prompts, inputs) |
+| [jq](https://stedolan.github.io/jq/) | Yes | JSON parsing |
 | [gh](https://cli.github.com/) | No | GitHub integration |
-| [jq](https://stedolan.github.io/jq/) | No | JSON parsing |
+| [glab](https://gitlab.com/gitlab-org/cli) | No | GitLab integration |
 | [claude](https://claude.ai/code) | No | AI features |
 
 ## Uninstall

@@ -54,26 +54,27 @@ install_pkg() {
   fi
 }
 
-# fzf (required)
-if command -v fzf &>/dev/null; then
-  info "fzf"
-else
-  echo "  [..] fzf (required) — installing..."
-  if install_pkg fzf fzf; then
-    info "fzf installed"
+# Required deps (auto-install)
+for dep in fzf gum jq; do
+  if command -v "$dep" &>/dev/null; then
+    info "$dep"
   else
-    warn "Could not install fzf — install it manually"
-    exit 1
+    echo "  [..] $dep (required) — installing..."
+    if install_pkg "$dep" "$dep"; then
+      info "$dep installed"
+    else
+      warn "Could not install $dep — install it manually: brew install $dep"
+      exit 1
+    fi
   fi
-fi
+done
 
-# Optional deps
-for dep in jq:jq gh:gh glab:glab; do
-  cmd="${dep%%:*}" pkg="${dep##*:}"
-  if command -v "$cmd" &>/dev/null; then
-    info "$cmd"
+# Optional deps (check only)
+for dep in gh glab claude; do
+  if command -v "$dep" &>/dev/null; then
+    info "$dep"
   else
-    dim "  [--] $cmd (optional)"
+    dim "  [--] $dep (optional)"
   fi
 done
 echo ""
