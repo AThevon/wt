@@ -70,7 +70,4 @@ print_logo() {
   else
     echo -e "\033[1;38;5;208m  wt\033[0m" >&2
   fi
-
-  echo -e "\033[2mGit Worktree Manager v$VERSION\033[0m" >&2
-  msg ""
 }
