@@ -1,4 +1,4 @@
-{ lib, stdenvNoCC, makeWrapper, fzf, gum, chafa, gh, jq, glab }:
+{ lib, stdenvNoCC, makeWrapper, fzf, gum, gh, jq, glab }:
 
 stdenvNoCC.mkDerivation rec {
   pname = "wt";
@@ -13,13 +13,13 @@ stdenvNoCC.mkDerivation rec {
     mkdir -p $out/lib
     cp lib/*.sh $out/lib/
     mkdir -p $out/assets
-    cp assets/logo.png $out/assets/
+    cp assets/logo.ansi $out/assets/
     install -Dm644 completions/wt.zsh $out/share/zsh/site-functions/_wt
   '';
 
   postFixup = ''
     wrapProgram $out/bin/wt-core \
-      --prefix PATH : ${lib.makeBinPath [ fzf gum chafa gh jq glab ]}
+      --prefix PATH : ${lib.makeBinPath [ fzf gum gh jq glab ]}
   '';
 
   meta = with lib; {
