@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="1.10.4"
+VERSION="2.0.0"
 
 # =============================================================================
 # Options de ligne de commande
@@ -280,9 +280,10 @@ if [[ "$1" == "--setup" ]]; then
   # Colors for setup (defined early since msg() isn't available yet)
   if [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then
     _GREEN=$'\033[32m'
+    _RED=$'\033[31m'
     _RESET=$'\033[0m'
   else
-    _GREEN='' _RESET=''
+    _GREEN='' _RED='' _RESET=''
   fi
   _msg() { echo -e "$@" >&2; }
 
@@ -309,32 +310,21 @@ if [[ "$1" == "--setup" ]]; then
   # Check dependencies
   _msg "Dependencies:"
   deps_ok=true
-  if command -v fzf &>/dev/null; then
-    _msg "  [ok] fzf"
-  else
-    _msg "  [!!] fzf (required) - install with: brew install fzf"
-    deps_ok=false
-  fi
-  if command -v gh &>/dev/null; then
-    _msg "  [ok] gh (GitHub CLI)"
-  else
-    _msg "  [--] gh (optional, GitHub) - install with: brew install gh"
-  fi
-  if command -v glab &>/dev/null; then
-    _msg "  [ok] glab (GitLab CLI)"
-  else
-    _msg "  [--] glab (optional, GitLab) - install with: brew install glab"
-  fi
-  if command -v jq &>/dev/null; then
-    _msg "  [ok] jq"
-  else
-    _msg "  [--] jq (optional) - install with: brew install jq"
-  fi
-  if command -v claude &>/dev/null; then
-    _msg "  [ok] claude"
-  else
-    _msg "  [--] claude (optional)"
-  fi
+  for dep in fzf gum jq; do
+    if command -v "$dep" &>/dev/null; then
+      _msg "  ${_GREEN}●${_RESET} $dep  installed"
+    else
+      _msg "  ${_RED}●${_RESET} $dep  ${_RED}missing${_RESET} — install with: brew install $dep"
+      deps_ok=false
+    fi
+  done
+  for dep in gh glab claude; do
+    if command -v "$dep" &>/dev/null; then
+      _msg "  ${_GREEN}●${_RESET} $dep  installed"
+    else
+      _msg "  ○ $dep  optional"
+    fi
+  done
   _msg ""
 
   if [[ "$deps_ok" == false ]]; then
@@ -446,7 +436,7 @@ Quick start:
   wt -             Switch to previous worktree (like cd -)
   wt .             Switch to main worktree
 
-Dependencies: fzf (required), gh/glab, jq, claude (optional)
+Dependencies: fzf, gum, jq (required), gh/glab, claude (optional)
 EOF
   exit 0
 fi
@@ -491,9 +481,13 @@ source "$LIB_DIR/stash.sh"
 # =============================================================================
 
 main_menu() {
-  if ! has_fzf; then
-    msg "fzf is required"
-    msg "Install with: brew install fzf"
+  local missing_deps=()
+  has_fzf || missing_deps+=("fzf")
+  has_gum || missing_deps+=("gum")
+  has_jq  || missing_deps+=("jq")
+  if [[ ${#missing_deps[@]} -gt 0 ]]; then
+    msg_error "Missing required dependencies: ${missing_deps[*]}"
+    msg "Install with: brew install ${missing_deps[*]}"
     exit 1
   fi
 
@@ -508,19 +502,19 @@ main_menu() {
     # Construire les actions
     local actions=""
     actions+=$'\n'""  # Ligne vide comme séparateur
-    actions+=$'\n'"${C_DIM}›${C_RESET} Create a worktree"
-    actions+=$'\n'"${C_DIM}◇${C_RESET} Manage stashes"
+    actions+=$'\n'"${C_GREEN}+${C_RESET} Create a worktree"
+    actions+=$'\n'"${C_ORANGE}⧉${C_RESET} Manage stashes"
     if [[ "$secondary_count" -ge 1 ]]; then
-      actions+=$'\n'"${C_DIM}×${C_RESET} Delete worktree(s)"
+      actions+=$'\n'"${C_RED}✕${C_RESET} Delete worktree(s)"
     fi
-    actions+=$'\n'"${C_DIM}◦${C_RESET} Settings"
-    actions+=$'\n'"${C_DIM}‹${C_RESET} Quit"
+    actions+=$'\n'"${C_DIM}⚙${C_RESET} Settings"
+    actions+=$'\n'"${C_DIM}↩${C_RESET} Quit"
 
     local menu="${worktrees_formatted}${actions}"
 
     # Header avec raccourcis clavier
     local pr_term=$(get_pr_term)
-    local header="${C_BOLD}$REPO_NAME${C_RESET}  ${C_DIM}^E editor · ^N new · ^P ${pr_term}s · ^G issues · ^D delete${C_RESET}"
+    local header="${C_ORANGE}wt${C_RESET} ${C_DIM}│${C_RESET} ${C_DIM}^E${C_RESET} editor ${C_DIM}│${C_RESET} ${C_DIM}^N${C_RESET} new ${C_DIM}│${C_RESET} ${C_DIM}^P${C_RESET} ${pr_term}s ${C_DIM}│${C_RESET} ${C_DIM}^G${C_RESET} issues ${C_DIM}│${C_RESET} ${C_DIM}^D${C_RESET} delete"
 
     local result=$(echo "$menu" | \
       fzf --height=70% \
@@ -536,7 +530,7 @@ main_menu() {
               exit 0
             fi
             # Clean line (remove icon only for actions, not worktrees)
-            if [[ \"\$line\" == \"›\"* || \"\$line\" == \"◇\"* || \"\$line\" == \"×\"* || \"\$line\" == \"‹\"* || \"\$line\" == \"◦\"* ]]; then
+            if [[ \"\$line\" == \"+\"* || \"\$line\" == \"⧉\"* || \"\$line\" == \"✕\"* || \"\$line\" == \"↩\"* || \"\$line\" == \"⚙\"* ]]; then
               clean_line=\$(echo \"\$line\" | sed -E 's/^[^A-Za-z]*//')
             else
               clean_line=\"\$line\"
@@ -653,7 +647,7 @@ main_menu() {
     # Handle keyboard shortcuts
     case "$key" in
       ctrl-e)
-        if [[ -n "$selected" && "$selected" != "───"* && "$selected" != "›"* && "$selected" != "◇"* && "$selected" != "×"* && "$selected" != "‹"* && "$selected" != "◦"* ]]; then
+        if [[ -n "$selected" && "$selected" != "───"* && "$selected" != "+"* && "$selected" != "⧉"* && "$selected" != "✕"* && "$selected" != "↩"* && "$selected" != "⚙"* ]]; then
           local path=$(echo "$selected" | awk '{print $2}' | sed "s|^~|$HOME|")
           if [[ -d "$path" ]]; then
             local editor=$(get_editor)
@@ -713,7 +707,7 @@ main_menu() {
 
     # Clean action lines (remove icon only for actions, not worktrees)
     local clean_selected
-    if [[ "$selected" == "›"* || "$selected" == "◇"* || "$selected" == "×"* || "$selected" == "‹"* || "$selected" == "◦"* ]]; then
+    if [[ "$selected" == "+"* || "$selected" == "⧉"* || "$selected" == "✕"* || "$selected" == "↩"* || "$selected" == "⚙"* ]]; then
       clean_selected=$(echo "$selected" | sed -E 's/^[^A-Za-z]*//')
     else
       clean_selected="$selected"
