@@ -66,7 +66,18 @@ print_logo() {
   fi
 
   if [[ -f "$logo_ansi" ]] && [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then
-    cat "$logo_ansi" >&2
+    # Center the logo horizontally
+    local term_cols=$(tput cols 2>/dev/null || echo 80)
+    # Get visible width of first non-empty line (strip ANSI escapes)
+    local logo_width
+    logo_width=$(head -1 "$logo_ansi" | sed 's/\x1b\[[0-9;]*m//g' | wc -m)
+    local pad=$(( (term_cols - logo_width) / 2 ))
+    [[ $pad -lt 0 ]] && pad=0
+    local padding=""
+    printf -v padding '%*s' "$pad" ''
+    while IFS= read -r line; do
+      echo -e "${padding}${line}" >&2
+    done < "$logo_ansi"
   else
     echo -e "\033[1;38;5;208m  wt\033[0m" >&2
   fi
