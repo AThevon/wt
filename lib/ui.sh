@@ -57,32 +57,23 @@ ui_box() {
   gum style --border rounded --padding "0 1" "$@" >&2
 }
 
-# Print the new logo — WT ANSI Shadow + tiger eyes band
+# Print the logo — chafa render of tiger PNG if available, fallback to text
 print_logo() {
-  local use_color=false
-  if [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then
-    use_color=true
+  local logo_img="$SCRIPT_DIR/assets/logo.png"
+  # Nix install: assets/ is a sibling of bin/
+  if [[ ! -f "$logo_img" ]]; then
+    logo_img="$(dirname "$SCRIPT_DIR")/assets/logo.png"
   fi
 
-  if $use_color; then
-    echo -e "\033[1;38;5;208m" >&2
-  fi
-
-  cat >&2 << 'LOGO'
- █████   ███   █████ ███████████
-░░███   ░███  ░░███ ░█░░░███░░░█    ▓▓▒▒▒  ▒▒▒▒       ▓▓▓███▓▓▓▓▓ ▓▓▓▓▓▓▓▓▓ ▓▓▓▓▓███▓▓▓       ▒▒▒▒  ▒▒▒▓▓
- ░███   ░███   ░███ ░   ░███  ░     ▓▓▒▒▒  ▒▒▒▒▒           ▓██▓▓▓ ▓▓▓▓▓▓▓▓▓ ▓▓▓▓▓▓           ▒▒▒▒▒  ▒▒▒▓▓
- ░███   ░███   ░███     ░███        ▓▓▒▒▒  ▒▒▒▒▒▒▓   ░▒▓▓    ▒█▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓    ▓▓▒    ▓▒▒▒▒▒▒  ▒▒▒▓▓
- ░░███  █████  ███      ░███        ▓▓▒▒▒  ▒▒ ▒▒▒▓▓   ▒▒▓  ▓   ▒▓▓▓▓▓▓▓▓▓▓▓▓▓▒   ▓  ▓▒▒   ▓▓▒▒▒ ▒▒  ▒▒▒▓▓
-  ░░░█████░█████░       ░███        ▓▓▒▒▒  ▒▒  ▒▒▒▓▓    ▒▒▒▒    ▒▒▓▓▓▓▓▓▓▓▓▒▒    ▒▒▒▒    ▓▓▒▒▒  ▒▒  ▒▒▒▓▓
-    ░░███ ░░███         █████       ▓▓▒▒▒  ▒▒  ▒▒▒▒▓▓▓█         ▒▒▓▓▓▓▓▓▓▓▓▒▒         █▓▓▓▒▒▒▒  ▒▒  ▒▒▒▓▓
-     ░░░   ░░░         ░░░░░
-LOGO
-
-  if $use_color; then
-    echo -e "\033[0m\033[2mGit Worktree Manager v$VERSION\033[0m" >&2
+  if command -v chafa &>/dev/null && [[ -f "$logo_img" ]]; then
+    local cols=$(( $(tput cols 2>/dev/null || echo 80) / 3 ))
+    [[ $cols -lt 15 ]] && cols=15
+    [[ $cols -gt 40 ]] && cols=40
+    chafa --format=symbols --size="${cols}x" --symbols=block "$logo_img" >&2
   else
-    msg "Git Worktree Manager v$VERSION"
+    echo -e "\033[1;38;5;208m  wt\033[0m" >&2
   fi
+
+  echo -e "\033[2mGit Worktree Manager v$VERSION\033[0m" >&2
   msg ""
 }
