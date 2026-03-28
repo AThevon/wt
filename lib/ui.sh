@@ -66,10 +66,10 @@ print_logo() {
   fi
 
   if command -v chafa &>/dev/null && [[ -f "$logo_img" ]]; then
-    local cols=$(( $(tput cols 2>/dev/null || echo 80) / 5 ))
-    [[ $cols -lt 10 ]] && cols=10
-    [[ $cols -gt 25 ]] && cols=25
-    chafa --format=symbols --size="${cols}x" --symbols=block "$logo_img" >&2
+    local cols=$(( $(tput cols 2>/dev/null || echo 80) / 6 ))
+    [[ $cols -lt 8 ]] && cols=8
+    [[ $cols -gt 15 ]] && cols=15
+    chafa --format=symbols --size="${cols}x" --symbols=block --passthrough=none "$logo_img" >&2
   else
     echo -e "\033[1;38;5;208m  wt\033[0m" >&2
   fi
