@@ -37,7 +37,12 @@ ui_spin_fn() {
 }
 
 ui_confirm() {
-  gum confirm "$@"
+  gum confirm \
+    --selected.background 208 \
+    --selected.foreground 0 \
+    --unselected.background "" \
+    --unselected.foreground 208 \
+    "$@"
 }
 
 ui_input() {
@@ -60,9 +65,9 @@ ui_box() {
 # Print the logo — pre-rendered ANSI tiger, fallback to text
 print_logo() {
   local logo_ansi="$SCRIPT_DIR/assets/logo.ansi"
-  # Nix install: assets/ is a sibling of bin/
+  # Nix install: assets/ is at $out/assets/wt/
   if [[ ! -f "$logo_ansi" ]]; then
-    logo_ansi="$(dirname "$SCRIPT_DIR")/assets/logo.ansi"
+    logo_ansi="$(dirname "$SCRIPT_DIR")/assets/wt/logo.ansi"
   fi
 
   if [[ -f "$logo_ansi" ]] && [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then

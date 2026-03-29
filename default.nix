@@ -10,10 +10,10 @@ stdenvNoCC.mkDerivation rec {
 
   installPhase = ''
     install -Dm755 wt.sh $out/bin/wt-core
-    mkdir -p $out/lib
-    cp lib/*.sh $out/lib/
-    mkdir -p $out/assets
-    cp assets/logo.ansi $out/assets/
+    mkdir -p $out/lib/wt
+    cp lib/*.sh $out/lib/wt/
+    mkdir -p $out/assets/wt
+    cp assets/logo.ansi $out/assets/wt/
     install -Dm644 completions/wt.zsh $out/share/zsh/site-functions/_wt
   '';
 

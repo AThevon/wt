@@ -465,7 +465,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 # Nix install: lib/ is a sibling of bin/, not inside bin/
 if [[ ! -d "$LIB_DIR" ]]; then
-  LIB_DIR="$(dirname "$SCRIPT_DIR")/lib"
+  LIB_DIR="$(dirname "$SCRIPT_DIR")/lib/wt"
 fi
 
 source "$LIB_DIR/core.sh"
