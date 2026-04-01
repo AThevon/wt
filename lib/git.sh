@@ -191,7 +191,8 @@ create_from_branch() {
   fi
 
   local branch_name
-  local branch_header="${C_BOLD}Select branch${C_RESET}  ${C_DIM}Enter select · Esc cancel${C_RESET}"
+  local branch_header="${C_BOLD}Select branch${C_RESET}"
+  local branch_footer="Enter select · Esc cancel"
   branch_name=$(git branch -a --format='%(refname:short)' | \
     grep -v '^HEAD' | \
     fzf --height=60% \
@@ -199,6 +200,7 @@ create_from_branch() {
         --border \
         --ansi \
         --header="$branch_header" \
+        --footer="$branch_footer" \
         --preview="git log --oneline --graph --color=always -10 {}" \
         --preview-window=right:50%)
 
@@ -240,7 +242,8 @@ create_new_branch() {
   fi
 
   local current_branch=$(git branch --show-current 2>/dev/null || echo "HEAD")
-  local base_header="${C_BOLD}Base branch${C_RESET}  ${C_DIM}Enter select · Esc use $current_branch${C_RESET}"
+  local base_header="${C_BOLD}Base branch${C_RESET}"
+  local base_footer="Enter select · Esc use $current_branch"
   local base_branch
   base_branch=$(printf "%s\n" "$current_branch (current)" $(git branch -a --format='%(refname:short)' | grep -v '^HEAD') | \
     fzf --height=60% \
@@ -248,6 +251,7 @@ create_new_branch() {
         --border \
         --ansi \
         --header="$base_header" \
+        --footer="$base_footer" \
         --preview="
           branch=\$(echo {} | sed 's/ (current)\$//')
           git log --oneline --graph --color=always -10 \"\$branch\" 2>/dev/null
