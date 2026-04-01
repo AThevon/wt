@@ -601,13 +601,15 @@ action_delete_worktrees() {
         --layout=reverse \
         --border \
         --ansi \
+        --delimiter=$'\t' \
+        --with-nth=1 \
         --multi \
         --marker='x ' \
         --bind 'space:toggle+down' \
         --bind 'ctrl-a:select-all' \
         --header="$header" \
         --preview="
-          path=\$(echo {} | /usr/bin/awk '{print \$2}' | /usr/bin/sed \"s|^~|\$HOME|\")
+          path=\$(echo {} | /usr/bin/awk -F'\t' '{print \$2}' | /usr/bin/sed \"s|^~|\$HOME|\")
           if [[ -d \"\$path\" ]]; then
             branch=\$(/usr/bin/git -C \"\$path\" branch --show-current 2>/dev/null || echo 'detached')
             default_branch=\$(/usr/bin/git -C \"$MAIN_REPO\" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | /usr/bin/sed 's@^refs/remotes/origin/@@')
@@ -660,7 +662,7 @@ action_delete_worktrees() {
   local dirty_list=""
   local dirty_count=0
   while IFS= read -r line; do
-    local path=$(echo "$line" | awk '{print $2}' | sed "s|^~|$HOME|")
+    local path=$(echo "$line" | awk -F'\t' '{print $2}' | sed "s|^~|$HOME|")
     if [[ -d "$path" ]] && [[ -n $(git -C "$path" status --porcelain 2>/dev/null) ]]; then
       dirty_list+="  ${path/#$HOME/~}"$'\n'
       ((dirty_count++))
@@ -676,7 +678,7 @@ action_delete_worktrees() {
   # Final confirmation
   if ui_confirm "Delete $count worktree(s)?"; then
     echo "$selected" | while IFS= read -r line; do
-      local to_remove=$(echo "$line" | awk '{print $2}' | sed "s|^~|$HOME|")
+      local to_remove=$(echo "$line" | awk -F'\t' '{print $2}' | sed "s|^~|$HOME|")
       # Try normal remove, then force, then manual cleanup
       if git -C "$MAIN_REPO" worktree remove "$to_remove" 2>/dev/null; then
         msg "Deleted: $to_remove"

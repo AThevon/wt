@@ -149,7 +149,7 @@ format_worktree_line() {
     status_icon="${C_ORANGE}○${C_RESET}"
   fi
 
-  printf "%s %-48s %s[%s]\n" "$status_icon" "$short_path" "$dirty" "$branch"
+  printf "%s %s%s\t%s\n" "$status_icon" "$branch" "$dirty" "$short_path"
 }
 
 format_all_worktrees() {

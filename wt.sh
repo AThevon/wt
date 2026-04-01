@@ -512,16 +512,20 @@ main_menu() {
 
     local menu="${worktrees_formatted}${actions}"
 
-    # Header avec raccourcis clavier
+    # Header avec nom du repo
     local pr_term=$(get_pr_term)
-    local header="${C_ORANGE}wt${C_RESET} ${C_DIM}v${VERSION} │${C_RESET} ${C_DIM}^E${C_RESET} editor ${C_DIM}│${C_RESET} ${C_DIM}^N${C_RESET} new ${C_DIM}│${C_RESET} ${C_DIM}^P${C_RESET} ${pr_term}s ${C_DIM}│${C_RESET} ${C_DIM}^G${C_RESET} issues ${C_DIM}│${C_RESET} ${C_DIM}^D${C_RESET} delete"
+    local header="${C_ORANGE}wt${C_RESET} ${C_DIM}v${VERSION}${C_RESET} ${C_DIM}│${C_RESET} ${C_BOLD}${REPO_NAME}${C_RESET}"
+    local footer="^E editor │ ^N new │ ^P ${pr_term}s │ ^G issues │ ^D delete"
 
     local result=$(echo "$menu" | \
       fzf --height=70% \
           --layout=reverse \
           --border \
           --ansi \
+          --delimiter=$'\t' \
+          --with-nth=1 \
           --header="$header" \
+          --footer="$footer" \
           --expect=ctrl-e,ctrl-n,ctrl-p,ctrl-g,ctrl-d \
           --preview="
             line={}
@@ -580,7 +584,7 @@ main_menu() {
               echo ''
               echo 'Config: ~/.config/wt/config'
             else
-              path=\$(echo \"\$line\" | /usr/bin/awk '{print \$2}' | /usr/bin/sed \"s|^~|\$HOME|\")
+              path=\$(echo \"\$line\" | /usr/bin/awk -F'\t' '{print \$2}' | /usr/bin/sed \"s|^~|\$HOME|\")
               if [[ -d \"\$path\" ]]; then
                 branch=\$(/usr/bin/git -C \"\$path\" branch --show-current 2>/dev/null || echo 'detached')
                 default_branch=\$(/usr/bin/git -C \"$MAIN_REPO\" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | /usr/bin/sed 's@^refs/remotes/origin/@@')
@@ -648,7 +652,7 @@ main_menu() {
     case "$key" in
       ctrl-e)
         if [[ -n "$selected" && "$selected" != "───"* && "$selected" != "+"* && "$selected" != "⧉"* && "$selected" != "✕"* && "$selected" != "↩"* && "$selected" != "⚙"* ]]; then
-          local path=$(echo "$selected" | awk '{print $2}' | sed "s|^~|$HOME|")
+          local path=$(echo "$selected" | awk -F'\t' '{print $2}' | sed "s|^~|$HOME|")
           if [[ -d "$path" ]]; then
             local editor=$(get_editor)
             msg "Opening in $editor: $path"
@@ -741,7 +745,7 @@ main_menu() {
         ;;
       *)
         # C'est un worktree existant - extraire et retourner le path
-        local path=$(echo "$selected" | awk '{print $2}' | sed "s|^~|$HOME|")
+        local path=$(echo "$selected" | awk -F'\t' '{print $2}' | sed "s|^~|$HOME|")
         if [[ -d "$path" ]]; then
           echo "$path"
           return 0
@@ -830,7 +834,7 @@ if [[ -n "$1" && "$1" != "--"* ]]; then
   worktrees_list=$(format_all_worktrees)
   match=$(echo "$worktrees_list" | fzf --filter="$1" | head -1)
   if [[ -n "$match" ]]; then
-    path=$(echo "$match" | awk '{print $2}' | sed "s|^~|$HOME|")
+    path=$(echo "$match" | awk -F'\t' '{print $2}' | sed "s|^~|$HOME|")
     if [[ -d "$path" ]]; then
       echo "$path"
       exit 0
