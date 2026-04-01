@@ -90,19 +90,21 @@ wt .        # Main worktree
 ### Main Menu
 
 ```
-wt v2.0.0 │ ^E editor │ ^N new │ ^P PRs │ ^G issues │ ^D delete
-──────────────────────────────────────────────────────────────────
-  ● ~/projects/myapp                                    [main]
-  ★ ~/projects/myapp-feature-new                        [feature]
-  ○ ~/projects/myapp-feature-auth                    *  [auth]
-  ◎ ~/projects/myapp-reviewing-fix-bug                  [fix/bug]
-  ✓ ~/projects/myapp-old-feature                        [old]
+wt v2.0.0 │ myapp
+──────────────────────────────────────────────────────
+  ● main
+  ★ feature/new
+  ○ feature/auth *
+  ◎ fix/bug
+  ✓ old-feature
 
   + Create a worktree
   ⧉ Manage stashes
   ✕ Delete worktree(s)
   ⚙ Settings
   ↩ Quit
+──────────────────────────────────────────────────────
+^E editor │ ^N new │ ^P PRs │ ^G issues │ ^D delete
 ```
 
 ### Worktree Status Indicators
