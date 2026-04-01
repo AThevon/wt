@@ -81,7 +81,8 @@ select_claude_mode() {
     *) title="Claude mode" ;;
   esac
 
-  local header="${C_BOLD}$title${C_RESET}  ${C_DIM}^F forced · ^A ask · ^P plan${C_RESET}"
+  local header="${C_BOLD}$title${C_RESET}"
+  local footer="^F forced · ^A ask · ^P plan"
 
   local options=">> Forced (full auto)
 ?> Ask (confirm actions)
@@ -93,6 +94,7 @@ select_claude_mode() {
         --border \
         --ansi \
         --header="$header" \
+        --footer="$footer" \
         --expect=ctrl-f,ctrl-a,ctrl-p \
         --preview="
           case {} in
@@ -255,7 +257,8 @@ menu_review_pr() {
   fi
 
   # Boucle pour permettre Ctrl+O sans quitter
-  local header="${C_BOLD}Open ${pr_term}s${C_RESET}  ${C_DIM}Enter select · ^O browser${C_RESET}"
+  local header="${C_BOLD}Open ${pr_term}s${C_RESET}"
+  local footer="Enter select · ^O browser"
   while true; do
     local result=$(echo -e "$prs" | \
       fzf --height=70% \
@@ -263,6 +266,7 @@ menu_review_pr() {
           --border \
           --ansi \
           --header="$header" \
+          --footer="$footer" \
           --delimiter='\t' \
           --with-nth=1,2,3,4 \
           --preview="bash \"$SCRIPT_PATH\" --pr-preview {1}" \
@@ -343,7 +347,8 @@ select_issue_action() {
 Launch Claude
 Just create worktree"
 
-  local header="${C_BOLD}Issue #$issue_num${C_RESET}  ${C_DIM}^A auto · ^L claude · ^W worktree${C_RESET}"
+  local header="${C_BOLD}Issue #$issue_num${C_RESET}"
+  local footer="^A auto · ^L claude · ^W worktree"
 
   local result
   result=$(fzf --height=25% \
@@ -351,6 +356,7 @@ Just create worktree"
         --border \
         --ansi \
         --header="$header" \
+        --footer="$footer" \
         --expect=ctrl-a,ctrl-l,ctrl-w \
         --preview="
           case {} in
@@ -418,7 +424,8 @@ menu_from_issue() {
   fi
 
   # Boucle pour permettre Ctrl+O sans quitter
-  local header="${C_BOLD}Open Issues${C_RESET}  ${C_DIM}Enter select · ^O browser${C_RESET}"
+  local header="${C_BOLD}Open Issues${C_RESET}"
+  local footer="Enter select · ^O browser"
   while true; do
     local result=$(echo "$issues" | \
       fzf --height=70% \
@@ -426,6 +433,7 @@ menu_from_issue() {
           --border \
           --ansi \
           --header="$header" \
+          --footer="$footer" \
           --delimiter='\t' \
           --with-nth=1,2,3,4 \
           --preview="bash \"$SCRIPT_PATH\" --issue-preview {1}" \
@@ -490,7 +498,8 @@ menu_create_worktree() {
   while true; do
     local pr_term=$(get_pr_term)
     local pr_term_lower=$(echo "$pr_term" | tr '[:upper:]' '[:lower:]')
-    local header="${C_BOLD}Create a worktree${C_RESET}  ${C_DIM}^N new · ^B branch · ^C current · ^I issue · ^P $pr_term_lower${C_RESET}"
+    local header="${C_BOLD}Create a worktree${C_RESET}"
+    local footer="^N new · ^B branch · ^C current · ^I issue · ^P $pr_term_lower"
 
     local result=$(printf "%s\n" \
       "New branch" \
@@ -504,6 +513,7 @@ menu_create_worktree() {
           --border \
           --ansi \
           --header="$header" \
+          --footer="$footer" \
           --expect=ctrl-n,ctrl-b,ctrl-c,ctrl-i,ctrl-p)
 
     local key=$(echo "$result" | head -1)
@@ -595,19 +605,23 @@ action_delete_worktrees() {
   done > "$tmpfile"
 
   # Multi-select with Space, confirm with Enter
-  local header="${C_BOLD}Delete worktree(s)${C_RESET}  ${C_DIM}Space select · ^A all · Enter confirm${C_RESET}"
+  local header="${C_BOLD}Delete worktree(s)${C_RESET}"
+  local footer="Space select · ^A all · Enter confirm"
   local selected
   selected=$(fzf --height=60% \
         --layout=reverse \
         --border \
         --ansi \
+        --delimiter=$'\t' \
+        --with-nth=1 \
         --multi \
         --marker='x ' \
         --bind 'space:toggle+down' \
         --bind 'ctrl-a:select-all' \
         --header="$header" \
+        --footer="$footer" \
         --preview="
-          path=\$(echo {} | /usr/bin/awk '{print \$2}' | /usr/bin/sed \"s|^~|\$HOME|\")
+          path=\$(echo {} | /usr/bin/awk -F'\t' '{print \$2}' | /usr/bin/sed \"s|^~|\$HOME|\")
           if [[ -d \"\$path\" ]]; then
             branch=\$(/usr/bin/git -C \"\$path\" branch --show-current 2>/dev/null || echo 'detached')
             default_branch=\$(/usr/bin/git -C \"$MAIN_REPO\" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | /usr/bin/sed 's@^refs/remotes/origin/@@')
@@ -660,7 +674,7 @@ action_delete_worktrees() {
   local dirty_list=""
   local dirty_count=0
   while IFS= read -r line; do
-    local path=$(echo "$line" | awk '{print $2}' | sed "s|^~|$HOME|")
+    local path=$(echo "$line" | awk -F'\t' '{print $2}' | sed "s|^~|$HOME|")
     if [[ -d "$path" ]] && [[ -n $(git -C "$path" status --porcelain 2>/dev/null) ]]; then
       dirty_list+="  ${path/#$HOME/~}"$'\n'
       ((dirty_count++))
@@ -676,7 +690,7 @@ action_delete_worktrees() {
   # Final confirmation
   if ui_confirm "Delete $count worktree(s)?"; then
     echo "$selected" | while IFS= read -r line; do
-      local to_remove=$(echo "$line" | awk '{print $2}' | sed "s|^~|$HOME|")
+      local to_remove=$(echo "$line" | awk -F'\t' '{print $2}' | sed "s|^~|$HOME|")
       # Try normal remove, then force, then manual cleanup
       if git -C "$MAIN_REPO" worktree remove "$to_remove" 2>/dev/null; then
         msg "Deleted: $to_remove"
@@ -719,7 +733,8 @@ run_preferences_wizard() {
   available_editors+=("custom...")
 
   # Step 1: IDE
-  local header_step1="${C_BOLD}Step 1/2 — Preferred editor${C_RESET}  ${C_DIM}^S skip${C_RESET}"
+  local header_step1="${C_BOLD}Step 1/2 — Preferred editor${C_RESET}"
+  local footer_step1="^S skip"
   local ide_result
   ide_result=$(printf '%s\n' "${available_editors[@]}" | \
     fzf --height=40% \
@@ -727,6 +742,7 @@ run_preferences_wizard() {
         --border \
         --ansi \
         --header="$header_step1" \
+        --footer="$footer_step1" \
         --expect=ctrl-s \
         --preview='
           case {} in
@@ -775,7 +791,8 @@ run_preferences_wizard() {
   fi
 
   # Step 2: Platform
-  local header_step2="${C_BOLD}Step 2/2 — Git platform${C_RESET}  ${C_DIM}^S skip${C_RESET}"
+  local header_step2="${C_BOLD}Step 2/2 — Git platform${C_RESET}"
+  local footer_step2="^S skip"
   local current_remote_guess="github"
   local remote_url
   remote_url=$(git -C "${MAIN_REPO:-$PWD}" remote get-url origin 2>/dev/null || echo "")
@@ -791,6 +808,7 @@ run_preferences_wizard() {
         --border \
         --ansi \
         --header="$header_step2" \
+        --footer="$footer_step2" \
         --expect=ctrl-s \
         --preview="
           case {} in
@@ -978,7 +996,8 @@ menu_settings() {
     local cur_claude_mode="${WT_CLAUDE_MODE:-prompt each time}"
     local cur_list_limit="${WT_LIST_LIMIT:-20}"
 
-    local header="${C_BOLD}⚙ Settings${C_RESET}  ${C_DIM}Enter to edit · ^R reset${C_RESET}"
+    local header="${C_BOLD}⚙ Settings${C_RESET}"
+    local footer="Enter to edit · ^R reset"
 
     local options
     options=$(printf '%s\n' \
@@ -1000,6 +1019,7 @@ menu_settings() {
           --border \
           --ansi \
           --header="$header" \
+          --footer="$footer" \
           --expect=ctrl-r \
           --preview='
             case {} in

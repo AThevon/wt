@@ -88,7 +88,8 @@ _stash_partial() {
     return 1
   fi
 
-  local partial_header="${C_BOLD}Partial stash${C_RESET}  ${C_DIM}Space select · ^A all · Enter confirm${C_RESET}"
+  local partial_header="${C_BOLD}Partial stash${C_RESET}"
+  local partial_footer="Space select · ^A all · Enter confirm"
 
   local selected=$(echo "$all_files" | \
     fzf --height=60% \
@@ -100,6 +101,7 @@ _stash_partial() {
         --bind 'space:toggle+down' \
         --bind 'ctrl-a:select-all' \
         --header="$partial_header" \
+        --footer="$partial_footer" \
         --preview="git diff --color=always -- {} 2>/dev/null || git diff --cached --color=always -- {} 2>/dev/null || cat {}" \
         --preview-window=right:50%)
 
@@ -154,7 +156,8 @@ menu_stash() {
 
     if [[ -z "$stashes" ]]; then
       # Proposer de créer un stash
-      local empty_header="${C_BOLD}No stashes${C_RESET}  ${C_DIM}^N create · ^E partial${C_RESET}"
+      local empty_header="${C_BOLD}No stashes${C_RESET}"
+      local empty_footer="^N create · ^E partial"
       local empty_result=$(printf "%s\n" \
         "Create stash (all changes)" \
         "Create partial stash (select files)" \
@@ -164,6 +167,7 @@ menu_stash() {
             --border \
             --ansi \
             --header="$empty_header" \
+            --footer="$empty_footer" \
             --expect=ctrl-n,ctrl-e)
 
       local empty_key=$(echo "$empty_result" | head -1)
@@ -200,9 +204,10 @@ menu_stash() {
     local formatted_list=$(_format_stash_list "$stashes")
 
     # Header avec titre stylé
-    local header="${C_BOLD}Stashes${C_RESET}  ${C_DIM}Enter actions · Space select · ? help${C_RESET}
+    local header="${C_BOLD}Stashes${C_RESET}
 ref         │ age  │ files │ branch       │ message
 ────────────┴──────┴───────┴──────────────┴─────────────────────────────"
+    local footer="Enter actions · Space select · ? help"
 
     # Aide complète pour le raccourci ?
     local help_text='
@@ -254,6 +259,7 @@ ref         │ age  │ files │ branch       │ message
           --bind 'space:toggle+down' \
           --bind "?:preview(echo '$help_text')" \
           --header="$header" \
+          --footer="$footer" \
           --preview='
             stash_ref=$(echo {} | cut -d" " -f1)
 
@@ -529,13 +535,15 @@ Rename stash
 Back"
 
     # Menu d'actions pour le stash sélectionné
-    local stash_header="${C_BOLD}$stash_ref${C_RESET}  ${C_DIM}^A apply · ^P pop · ^D drop · ^W wt · ^B branch · ^S show${C_RESET}"
+    local stash_header="${C_BOLD}$stash_ref${C_RESET}"
+    local stash_footer="^A apply · ^P pop · ^D drop · ^W wt · ^B branch · ^S show"
     local action_result=$(echo "$menu_options" | \
       fzf --height=40% \
           --layout=reverse \
           --border \
           --ansi \
           --header="$stash_header" \
+          --footer="$stash_footer" \
           --expect=ctrl-a,ctrl-p,ctrl-d,ctrl-w,ctrl-b,ctrl-s,ctrl-x,ctrl-r \
           --preview='
             action=$(echo {} | cut -d" " -f1)

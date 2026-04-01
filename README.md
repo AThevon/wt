@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.0.0-orange" alt="Version" />
+  <img src="https://img.shields.io/badge/version-2.0.1-orange" alt="Version" />
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License" />
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20WSL-lightgrey" alt="Platform" />
 </p>
@@ -90,19 +90,21 @@ wt .        # Main worktree
 ### Main Menu
 
 ```
-wt v2.0.0 │ ^E editor │ ^N new │ ^P PRs │ ^G issues │ ^D delete
-──────────────────────────────────────────────────────────────────
-  ● ~/projects/myapp                                    [main]
-  ★ ~/projects/myapp-feature-new                        [feature]
-  ○ ~/projects/myapp-feature-auth                    *  [auth]
-  ◎ ~/projects/myapp-reviewing-fix-bug                  [fix/bug]
-  ✓ ~/projects/myapp-old-feature                        [old]
+wt v2.0.1 │ myapp
+──────────────────────────────────────────────────────
+  ● main
+  ★ feature/new
+  ○ feature/auth *
+  ◎ fix/bug
+  ✓ old-feature
 
   + Create a worktree
   ⧉ Manage stashes
   ✕ Delete worktree(s)
   ⚙ Settings
   ↩ Quit
+──────────────────────────────────────────────────────
+^E editor │ ^N new │ ^P PRs │ ^G issues │ ^D delete
 ```
 
 ### Worktree Status Indicators
