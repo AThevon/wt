@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://wt-tiger.vercel.app/og-image.png" alt="worktigre - Git Worktree Manager" width="600" />
+  <img src="assets/logo.png" alt="worktigre" width="160" />
 </p>
 
 <h1 align="center">worktigre</h1>
@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="https://wt-tiger.vercel.app">Website</a> •
-  <a href="https://wt-tiger.vercel.app/docs">Documentation</a> •
+  <a href="https://worktigre.vercel.app">Website</a> •
+  <a href="https://worktigre.vercel.app/docs">Documentation</a> •
   <a href="#installation">Installation</a>
 </p>
 
