@@ -1,7 +1,7 @@
 { lib, stdenvNoCC, makeWrapper, fzf, gum, gh, jq, glab }:
 
 stdenvNoCC.mkDerivation rec {
-  pname = "wt";
+  pname = "worktigre";
   version = "2.0.1";
 
   src = ./.;
@@ -10,10 +10,10 @@ stdenvNoCC.mkDerivation rec {
 
   installPhase = ''
     install -Dm755 wt.sh $out/bin/wt-core
-    mkdir -p $out/lib/wt
-    cp lib/*.sh $out/lib/wt/
-    mkdir -p $out/assets/wt
-    cp assets/logo.ansi $out/assets/wt/
+    mkdir -p $out/lib/worktigre
+    cp lib/*.sh $out/lib/worktigre/
+    mkdir -p $out/assets/worktigre
+    cp assets/logo*.ansi $out/assets/worktigre/
     install -Dm644 completions/wt.zsh $out/share/zsh/site-functions/_wt
   '';
 
@@ -24,7 +24,7 @@ stdenvNoCC.mkDerivation rec {
 
   meta = with lib; {
     description = "Git worktree manager with fzf integration and GitHub/GitLab support";
-    homepage = "https://github.com/AThevon/wt";
+    homepage = "https://github.com/AThevon/worktigre";
     license = licenses.mit;
     platforms = platforms.unix;
     mainProgram = "wt-core";

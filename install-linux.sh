@@ -11,5 +11,5 @@ if [[ -f "$SCRIPT_DIR/install.sh" ]]; then
   exec "$SCRIPT_DIR/install.sh"
 else
   echo "Downloading installer..."
-  curl -fsSL https://raw.githubusercontent.com/AThevon/wt/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/AThevon/worktigre/main/install.sh | bash
 fi

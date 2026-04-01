@@ -848,7 +848,7 @@ run_preferences_wizard() {
   # Write config file
   mkdir -p "$(dirname "$WT_CONFIG_FILE")"
   cat > "$WT_CONFIG_FILE" << WTEOF
-# wt — user configuration
+# worktigre — user configuration
 # Edit manually or via: wt > ⚙ Settings
 
 WT_EDITOR=${selected_editor}
@@ -965,7 +965,7 @@ run_install_wizard() {
 
   if [[ "$needs_rc" == "true" ]]; then
     echo "" >> "$rc_file"
-    echo "# wt - Git Worktree Manager" >> "$rc_file"
+    echo "# worktigre - Git Worktree Manager" >> "$rc_file"
     echo "$init_line" >> "$rc_file"
     msg "  ${C_GREEN}✓${C_RESET} Added init line to ${rc_file}"
   fi

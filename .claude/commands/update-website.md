@@ -1,12 +1,12 @@
 # update-website
 
-Met à jour le site officiel wt-site suite aux changements du package wt.
+Met à jour le site officiel wt-site suite aux changements du package worktigre.
 
 ## Instructions
 
 Tu dois effectuer les étapes suivantes :
 
-### 1. Analyser les changements récents sur wt
+### 1. Analyser les changements récents sur worktigre
 
 - Lire les commits récents avec `git log --oneline -10`
 - Identifier les changements importants (nouvelles features, corrections de bugs, modifications de comportement)
@@ -15,7 +15,7 @@ Tu dois effectuer les étapes suivantes :
 
 ### 2. Naviguer vers le projet wt-site
 
-- Aller dans le dossier `../wt-site` (par rapport au projet wt actuel)
+- Aller dans le dossier `../wt-site` (par rapport au projet worktigre actuel)
 - Vérifier que tu es sur la branche main et que le repo est à jour avec `git pull`
 
 ### 3. Créer une branche pour les modifications
@@ -45,7 +45,7 @@ Analyser et mettre à jour les fichiers suivants selon les changements détecté
 ### 6. Créer la Pull Request
 
 - Utiliser `gh pr create` pour créer une PR
-- Le titre doit être descriptif (ex: "docs: sync website with wt v1.4.0 changes")
+- Le titre doit être descriptif (ex: "docs: sync website with worktigre v1.4.0 changes")
 - Le body doit lister les changements effectués sur le site
 
 ## Notes importantes

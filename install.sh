@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # =============================================================================
-# wt - Universal Installer
+# worktigre - Universal Installer
 # =============================================================================
-# Usage: curl -fsSL https://raw.githubusercontent.com/AThevon/wt/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/AThevon/worktigre/main/install.sh | bash
 # =============================================================================
 
 set -e
 
-REPO="AThevon/wt"
+REPO="AThevon/worktigre"
 RAW_URL="https://raw.githubusercontent.com/$REPO/main/wt.sh"
 INSTALL_DIR="${HOME}/.local/bin"
 INSTALL_PATH="${INSTALL_DIR}/wt-core"
@@ -30,7 +30,7 @@ warn()  { echo "${RED}[!!]${RESET} $*"; }
 dim()   { echo "${DIM}$*${RESET}"; }
 
 echo ""
-echo "${BOLD}wt${RESET} — Git Worktree Manager"
+echo "${BOLD}worktigre${RESET} — Git Worktree Manager"
 echo "─────────────────────────"
 echo ""
 
@@ -81,7 +81,7 @@ echo ""
 
 # --- Download ----------------------------------------------------------------
 
-echo "Installing wt..."
+echo "Installing worktigre..."
 
 mkdir -p "$INSTALL_DIR"
 
@@ -97,7 +97,7 @@ fi
 chmod +x "$INSTALL_PATH"
 
 VERSION=$(grep -m1 'VERSION=' "$INSTALL_PATH" | cut -d'"' -f2)
-info "wt v${VERSION} installed to ${CYAN}${INSTALL_PATH}${RESET}"
+info "worktigre v${VERSION} installed to ${CYAN}${INSTALL_PATH}${RESET}"
 echo ""
 
 # --- PATH --------------------------------------------------------------------
@@ -115,7 +115,7 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
   path_line="export PATH=\"$INSTALL_DIR:\$PATH\""
   if ! grep -qF "$INSTALL_DIR" "$rc_file" 2>/dev/null; then
     echo "" >> "$rc_file"
-    echo "# wt - PATH" >> "$rc_file"
+    echo "# worktigre - PATH" >> "$rc_file"
     echo "$path_line" >> "$rc_file"
     info "Added PATH to ${CYAN}${rc_file}${RESET}"
   fi
@@ -136,7 +136,7 @@ if grep -q "wt-core --shell-init" "$rc_file" 2>/dev/null; then
   info "Shell init already configured"
 else
   echo "" >> "$rc_file"
-  echo "# wt - Git Worktree Manager" >> "$rc_file"
+  echo "# worktigre - Git Worktree Manager" >> "$rc_file"
   echo "$init_line" >> "$rc_file"
   info "Added init to ${CYAN}${rc_file}${RESET}"
 fi

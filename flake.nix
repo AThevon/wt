@@ -1,5 +1,5 @@
 {
-  description = "wt - Git worktree manager with fzf integration";
+  description = "worktigre - Git worktree manager with fzf integration";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -12,13 +12,13 @@
         pkgs = nixpkgs.legacyPackages.${system};
       in {
         packages = {
-          wt = pkgs.callPackage ./default.nix {};
-          default = self.packages.${system}.wt;
+          worktigre = pkgs.callPackage ./default.nix {};
+          default = self.packages.${system}.worktigre;
         };
       }
     ) // {
       overlays.default = final: prev: {
-        wt = final.callPackage ./default.nix {};
+        worktigre = final.callPackage ./default.nix {};
       };
     };
 }

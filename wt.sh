@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =============================================================================
-# wt - Git Worktree Manager avec fzf
+# worktigre - Git Worktree Manager avec fzf
 # =============================================================================
 # Le script retourne UNIQUEMENT le path vers lequel naviguer sur stdout
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
@@ -20,7 +20,7 @@ fi
 
 # Self-update: download latest version from GitHub
 if [[ "$1" == "--update" ]]; then
-  _REPO="AThevon/wt"
+  _REPO="AThevon/worktigre"
   _RAW_URL="https://raw.githubusercontent.com/$_REPO/main/wt.sh"
 
   # Colors
@@ -32,10 +32,10 @@ if [[ "$1" == "--update" ]]; then
   _msg() { echo -e "$@" >&2; }
 
   # Detect brew installs
-  if command -v brew &>/dev/null && brew list wt &>/dev/null 2>&1; then
+  if command -v brew &>/dev/null && brew list worktigre &>/dev/null 2>&1; then
     _msg ""
-    _msg "${_RED}[!!]${_RESET} wt is installed via Homebrew."
-    _msg "     Update with: ${_CYAN}brew upgrade wt${_RESET}"
+    _msg "${_RED}[!!]${_RESET} worktigre is installed via Homebrew."
+    _msg "     Update with: ${_CYAN}brew upgrade worktigre${_RESET}"
     _msg ""
     exit 1
   fi
@@ -106,7 +106,7 @@ fi
 if [[ "$1" == "--dev" ]]; then
   local_script="$(cd "$(dirname "$0")" && pwd)/wt.sh"
   cat <<EOF
-# wt - Dev Mode (local script)
+# worktigre - Dev Mode (local script)
 unalias wt 2>/dev/null
 function wt() {
   if [[ "\$1" == "--release" ]]; then
@@ -147,7 +147,7 @@ fi
 
 if [[ "$1" == "--shell-init" ]]; then
   cat <<'EOF'
-# wt - Git Worktree Manager
+# worktigre - Git Worktree Manager
 unalias wt 2>/dev/null
 function wt() {
   # Handle --dev: switch to local script from current worktree
@@ -371,9 +371,9 @@ if [[ "$1" == "--setup" ]]; then
     _msg "[ok] Already configured in $rc_file"
   else
     _msg ""
-    _msg "Adding wt to $rc_file..."
+    _msg "Adding worktigre to $rc_file..."
     echo "" >> "$rc_file"
-    echo "# wt - Git Worktree Manager" >> "$rc_file"
+    echo "# worktigre - Git Worktree Manager" >> "$rc_file"
     echo "$init_line" >> "$rc_file"
     _msg "[ok] Added to $rc_file"
   fi
@@ -465,7 +465,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 # Nix install: lib/ is a sibling of bin/, not inside bin/
 if [[ ! -d "$LIB_DIR" ]]; then
-  LIB_DIR="$(dirname "$SCRIPT_DIR")/lib/wt"
+  LIB_DIR="$(dirname "$SCRIPT_DIR")/lib/worktigre"
 fi
 
 source "$LIB_DIR/core.sh"

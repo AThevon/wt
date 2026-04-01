@@ -59,7 +59,7 @@ save_config_value() {
   # Create file with header if it doesn't exist
   if [[ ! -f "$WT_CONFIG_FILE" ]]; then
     cat > "$WT_CONFIG_FILE" << 'WTEOF'
-# wt — user configuration
+# worktigre — user configuration
 # Edit manually or via: wt > ⚙ Settings
 WTEOF
   fi

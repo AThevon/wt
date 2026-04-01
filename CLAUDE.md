@@ -1,4 +1,4 @@
-# wt - Git Worktree Manager
+# worktigre - Git Worktree Manager
 
 CLI bash interactif (~3700 lignes, fichier unique `wt.sh`) pour gérer les git worktrees avec intégration GitHub/GitLab et Claude.
 

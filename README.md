@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://wt-tiger.vercel.app/og-image.png" alt="wt - Git Worktree Manager" width="600" />
+  <img src="https://wt-tiger.vercel.app/og-image.png" alt="worktigre - Git Worktree Manager" width="600" />
 </p>
 
-<h1 align="center">wt</h1>
+<h1 align="center">worktigre</h1>
 
 <p align="center">
   <strong>Git worktrees, on steroids.</strong>
@@ -24,7 +24,7 @@
 
 ---
 
-## Why wt?
+## Why worktigre?
 
 Git worktrees are powerful but managing them manually is tedious. `wt` provides:
 
@@ -41,13 +41,13 @@ Git worktrees are powerful but managing them manually is tedious. `wt` provides:
 ### macOS (Homebrew)
 
 ```bash
-brew tap AThevon/wt && brew install wt
+brew tap AThevon/worktigre && brew install worktigre
 ```
 
 ### Linux / WSL / macOS (universal script)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AThevon/wt/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/AThevon/worktigre/main/install.sh | bash
 ```
 
 This will install `wt` to `~/.local/bin`, configure your shell, and install required dependencies.
@@ -56,10 +56,10 @@ This will install `wt` to `~/.local/bin`, configure your shell, and install requ
 
 ```bash
 # Try it
-nix run github:AThevon/wt
+nix run github:AThevon/worktigre
 
 # Or add to your flake inputs
-# inputs.wt.url = "github:AThevon/wt";
+# inputs.worktigre.url = "github:AThevon/worktigre";
 ```
 
 ### Update
@@ -230,7 +230,7 @@ Remove from your flake inputs and run `home-manager switch` or `nix profile remo
 
 **Homebrew:**
 ```bash
-brew uninstall wt && brew untap AThevon/wt
+brew uninstall worktigre && brew untap AThevon/worktigre
 ```
 
 **Manual install (Linux/WSL/macOS):**

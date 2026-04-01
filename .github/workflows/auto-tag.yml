@@ -47,6 +47,6 @@ jobs:
         uses: peter-evans/repository-dispatch@v2
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          repository: AThevon/homebrew-wt
+          repository: AThevon/homebrew-worktigre
           event-type: update-formula
           client-payload: '{"tag": "${{ steps.tag.outputs.tag }}"}'

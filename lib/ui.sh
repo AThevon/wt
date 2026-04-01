@@ -62,28 +62,30 @@ ui_box() {
   gum style --border rounded --padding "0 1" "$@" >&2
 }
 
-# Print the logo — pre-rendered ANSI tiger, fallback to text
+# Print the logo — responsive: full / medium / small depending on terminal width
 print_logo() {
-  local logo_ansi="$SCRIPT_DIR/assets/logo.ansi"
-  # Nix install: assets/ is at $out/assets/wt/
-  if [[ ! -f "$logo_ansi" ]]; then
-    logo_ansi="$(dirname "$SCRIPT_DIR")/assets/wt/logo.ansi"
+  local assets_dir="$SCRIPT_DIR/assets"
+  # Nix install: assets/ is at $out/assets/worktigre/
+  if [[ ! -d "$assets_dir" ]] || [[ ! -f "$assets_dir/logo.ansi" ]]; then
+    assets_dir="$(dirname "$SCRIPT_DIR")/assets/worktigre"
   fi
 
-  if [[ -f "$logo_ansi" ]] && [[ -t 2 ]] && [[ "${TERM:-}" != "dumb" ]]; then
-    # Center the logo horizontally
-    local term_cols=$(tput cols 2>/dev/null || echo 80)
-    # Get visible width of first non-empty line (strip ANSI escapes)
-    local logo_width
-    logo_width=$(head -1 "$logo_ansi" | sed 's/\x1b\[[0-9;]*m//g' | wc -m)
-    local pad=$(( (term_cols - logo_width) / 2 ))
-    [[ $pad -lt 0 ]] && pad=0
-    local padding=""
-    printf -v padding '%*s' "$pad" ''
-    while IFS= read -r line; do
-      echo -e "${padding}${line}" >&2
-    done < "$logo_ansi"
-  else
-    echo -e "\033[1;38;5;208m  wt\033[0m" >&2
+  if [[ ! -f "$assets_dir/logo.ansi" ]] || [[ ! -t 2 ]] || [[ "${TERM:-}" == "dumb" ]]; then
+    echo -e "\033[1;38;5;208m  worktigre\033[0m" >&2
+    return
   fi
+
+  local cols=$(stty size 2>/dev/tty </dev/tty | cut -d' ' -f2 2>/dev/null || echo 80)
+  local logo_file
+  if (( cols >= 125 )); then
+    logo_file="$assets_dir/logo.ansi"
+  elif (( cols >= 54 )); then
+    logo_file="$assets_dir/logo-medium.ansi"
+  else
+    logo_file="$assets_dir/logo-small.ansi"
+  fi
+
+  while IFS= read -r line; do
+    echo -e "${line}" >&2
+  done < "$logo_file"
 }
