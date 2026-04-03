@@ -7,7 +7,7 @@
 # Tous les messages vont sur stderr pour ne pas polluer le résultat
 # =============================================================================
 
-VERSION="2.1.0"
+VERSION="2.2.0"
 
 # =============================================================================
 # Options de ligne de commande
