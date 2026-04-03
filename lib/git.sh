@@ -159,6 +159,25 @@ format_all_worktrees() {
 }
 
 # =============================================================================
+# Env file auto-copy
+# =============================================================================
+
+# Copy .env files from main worktree to new worktree
+copy_env_to_worktree() {
+  local target="$1"
+  local copied=0
+  for f in "$MAIN_REPO"/.env*; do
+    [[ -f "$f" ]] || continue
+    [[ "$(basename "$f")" == *.example ]] && continue
+    cp "$f" "$target/"
+    copied=$((copied + 1))
+  done
+  if [[ $copied -gt 0 ]]; then
+    msg "Copied $copied env file(s) to worktree"
+  fi
+}
+
+# =============================================================================
 # Actions de création - retournent le path sur stdout
 # =============================================================================
 
@@ -176,6 +195,7 @@ create_from_current() {
 
   if git worktree add -b "$new_branch" "$worktree_path" HEAD >/dev/null 2>&1; then
     ui_box "Worktree created" "$worktree_path" "Branch: $new_branch"
+    copy_env_to_worktree "$worktree_path"
     echo "$worktree_path"  # SEUL output sur stdout
   else
     ui_error "Error creating worktree"
@@ -217,6 +237,7 @@ create_from_branch() {
 
   if git worktree add "$worktree_path" "$branch_name" >/dev/null 2>&1; then
     ui_box "Worktree created" "$worktree_path"
+    copy_env_to_worktree "$worktree_path"
     echo "$worktree_path"  # SEUL output sur stdout
   else
     ui_error "Error creating worktree"
@@ -280,6 +301,7 @@ create_new_branch() {
 
   if git worktree add -b "$branch_name" "$worktree_path" "$base_branch" >/dev/null 2>&1; then
     ui_box "Worktree created" "$worktree_path" "Branch: $branch_name (from $base_branch)"
+    copy_env_to_worktree "$worktree_path"
     echo "$worktree_path"  # SEUL output sur stdout
   else
     ui_error "Error creating worktree"
@@ -321,6 +343,7 @@ create_from_pr() {
 
     if [[ $ret -eq 0 ]]; then
       ui_box "Worktree created" "$worktree_path"
+      copy_env_to_worktree "$worktree_path"
       echo "$worktree_path"
       return 0
     fi
@@ -357,6 +380,7 @@ create_from_pr() {
 
   if [[ $? -eq 0 ]]; then
     ui_box "Worktree created" "$worktree_path"
+    copy_env_to_worktree "$worktree_path"
     echo "$worktree_path"
   else
     ui_error "Error creating worktree"
@@ -397,6 +421,7 @@ create_from_issue() {
 
   if git worktree add -b "$branch_name" "$worktree_path" "origin/$default_branch" >/dev/null 2>&1; then
     ui_box "Worktree created" "$worktree_path" "Branch: $branch_name"
+    copy_env_to_worktree "$worktree_path"
     echo "$worktree_path"  # SEUL output sur stdout
   else
     ui_error "Error creating worktree"
